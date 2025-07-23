@@ -1,0 +1,59 @@
+{
+  "name": "mantine-supabase-template",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "typegen": "npx supabase gen types typescript --linked > src/supabase/supabase.ts"
+  },
+  "dependencies": {
+    "@mantine/core": "^8.0.1",
+    "@mantine/form": "^8.0.1",
+    "@mantine/hooks": "^8.0.1",
+    "@mantine/modals": "^8.0.1",
+    "@mantine/notifications": "^8.0.1",
+    "@mantine/spotlight": "^8.0.1",
+    "@nanostores/react": "^1.0.0",
+    "@supabase/supabase-js": "^2.49.6",
+    "@tabler/icons-react": "^3.33.0",
+    "@types/node": "^24.1.0",
+    "cheerio": "^1.1.2",
+    "localforage": "^1.10.0",
+    "match-sorter": "^8.0.1",
+    "nanostores": "^1.0.1",
+    "node-fetch": "^3.3.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.0",
+    "sort-by": "^1.2.0",
+    "swr": "^2.3.4",
+    "ts-node": "^10.9.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5",
+    "@typescript-eslint/eslint-plugin": "^8.32.1",
+    "@typescript-eslint/parser": "^8.32.1",
+    "@vitejs/plugin-react-swc": "^3.9.0",
+    "eslint": "^9.27.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "postcss": "^8.5.3",
+    "postcss-preset-mantine": "^1.17.0",
+    "postcss-simple-vars": "^7.0.1",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  },
+  "prettier": {
+    "trailingComma": "all",
+    "tabWidth": 2,
+    "semi": true,
+    "singleQuote": true
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}
