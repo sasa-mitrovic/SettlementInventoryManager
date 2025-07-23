@@ -24,13 +24,15 @@ import {
   IconRefresh,
   IconUser,
   IconTrash,
+  IconUserCheck,
 } from '@tabler/icons-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
 import { useAuth } from '../components/AuthProvider';
 import { PermissionGate } from '../components/PermissionGate';
 import { RolePermissionManagement } from '../components/RolePermissionManagement';
+import { usePermissionContext } from '../supabase/optimizedRoleHooks';
 
 interface UserProfile {
   id: string;
@@ -54,6 +56,7 @@ interface Role {
 }
 
 export function Settings() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +68,7 @@ export function Settings() {
   // Use AuthProvider for reliable authentication state
   const { user: authUser, loading: authLoading, initialized } = useAuth();
   const { userProfile } = useOptimizedUserWithProfile();
+  const permissionContext = usePermissionContext();
 
   const fetchUsers = async () => {
     try {
@@ -209,6 +213,89 @@ export function Settings() {
     } finally {
       setDeletingUserId(null);
     }
+  };
+
+  // Impersonate user function
+  const impersonateUser = async (targetUser: UserProfile) => {
+    // Only super_admin can impersonate
+    if (userProfile?.role?.name?.toLowerCase() !== 'super_admin') {
+      notifications.show({
+        title: 'Access Denied',
+        message: 'Only super administrators can impersonate users',
+        color: 'red',
+      });
+      return;
+    }
+
+    // Don't allow impersonating yourself
+    if (targetUser.id === authUser?.id) {
+      notifications.show({
+        title: 'Invalid Action',
+        message: 'You cannot impersonate yourself',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    modals.openConfirmModal({
+      title: 'Impersonate User',
+      children: (
+        <Stack gap="sm">
+          <Text>
+            Are you sure you want to impersonate{' '}
+            <Text component="span" fw={600}>
+              {formatUserName(targetUser)}
+            </Text>
+            ?
+          </Text>
+          <Text size="sm" c="dimmed">
+            This will show you the application from their perspective. You can
+            return to your account by signing out and signing back in.
+          </Text>
+        </Stack>
+      ),
+      labels: { confirm: 'Impersonate', cancel: 'Cancel' },
+      confirmProps: { color: 'blue' },
+      onConfirm: async () => {
+        try {
+          // Store impersonation info
+          localStorage.setItem(
+            'impersonation_original_admin',
+            authUser?.id || '',
+          );
+          localStorage.setItem('impersonation_target_user', targetUser.id);
+          localStorage.setItem('impersonation_active', 'true');
+
+          // Force immediate refetch of permission data to get impersonated user
+          await permissionContext?.refetch();
+
+          // Trigger custom event for ImpersonationBanner to update
+          window.dispatchEvent(
+            new CustomEvent('impersonation-changed', {
+              detail: { active: true, targetUserId: targetUser.id },
+            }),
+          );
+
+          notifications.show({
+            title: 'Impersonation Started',
+            message: `You are now viewing as ${formatUserName(targetUser)}. Sign out to return to your admin account.`,
+            color: 'blue',
+            autoClose: 5000,
+          });
+
+          // Small delay to ensure React has re-rendered with new data
+          setTimeout(() => {
+            navigate('/');
+          }, 1000);
+        } catch (err) {
+          notifications.show({
+            title: 'Error',
+            message: 'Failed to impersonate user',
+            color: 'red',
+          });
+        }
+      },
+    });
   };
 
   // Confirmation modal for user deletion
@@ -356,41 +443,37 @@ export function Settings() {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {users.map((userProfile) => (
-                    <Table.Tr key={userProfile.id}>
+                  {users.map((user) => (
+                    <Table.Tr key={user.id}>
                       <Table.Td>
-                        <Text fw={500}>{formatUserName(userProfile)}</Text>
+                        <Text fw={500}>{formatUserName(user)}</Text>
                       </Table.Td>
                       <Table.Td>
                         <Text size="sm" c="dimmed">
-                          {userProfile.email}
+                          {user.email}
                         </Text>
                       </Table.Td>
                       <Table.Td>
                         <Badge
-                          color={getRoleBadgeColor(
-                            userProfile.role?.name || null,
-                          )}
+                          color={getRoleBadgeColor(user.role?.name || null)}
                           size="sm"
                           variant="light"
                         >
-                          {userProfile.role?.name || 'No Role'}
+                          {user.role?.name || 'No Role'}
                         </Badge>
                       </Table.Td>
                       <Table.Td>
                         <Badge
-                          color={userProfile.is_active ? 'green' : 'red'}
+                          color={user.is_active ? 'green' : 'red'}
                           size="sm"
                           variant="light"
                         >
-                          {userProfile.is_active ? 'Active' : 'Inactive'}
+                          {user.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </Table.Td>
                       <Table.Td>
                         <Text size="sm">
-                          {new Date(
-                            userProfile.created_at,
-                          ).toLocaleDateString()}
+                          {new Date(user.created_at).toLocaleDateString()}
                         </Text>
                       </Table.Td>
                       <Table.Td>
@@ -398,9 +481,9 @@ export function Settings() {
                           <PermissionGate permission="users.manage_roles">
                             <Select
                               placeholder="Select role"
-                              value={userProfile.role?.id || ''}
+                              value={user.role?.id || ''}
                               onChange={(value) =>
-                                updateUserRole(userProfile.id, value)
+                                updateUserRole(user.id, value)
                               }
                               data={[
                                 { value: '', label: 'No Role' },
@@ -411,22 +494,38 @@ export function Settings() {
                               ]}
                               size="sm"
                               w={150}
-                              disabled={updatingUserId === userProfile.id}
+                              disabled={updatingUserId === user.id}
                             />
                           </PermissionGate>
+
+                          {/* Impersonate button - Super Admin only */}
+                          {userProfile?.role?.name?.toLowerCase() ===
+                            'super_admin' &&
+                            user.id !== authUser?.id && (
+                              <Tooltip label="Impersonate user">
+                                <ActionIcon
+                                  color="blue"
+                                  variant="light"
+                                  size="sm"
+                                  onClick={() => impersonateUser(user)}
+                                >
+                                  <IconUserCheck size={14} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
 
                           <PermissionGate
                             anyPermissions={['users.delete', 'users.manage']}
                           >
-                            {canDeleteUser(userProfile) && (
+                            {canDeleteUser(user) && (
                               <Tooltip label="Delete user permanently">
                                 <ActionIcon
                                   color="red"
                                   variant="light"
                                   size="sm"
-                                  onClick={() => confirmDeleteUser(userProfile)}
-                                  loading={deletingUserId === userProfile.id}
-                                  disabled={deletingUserId === userProfile.id}
+                                  onClick={() => confirmDeleteUser(user)}
+                                  loading={deletingUserId === user.id}
+                                  disabled={deletingUserId === user.id}
                                 >
                                   <IconTrash size={14} />
                                 </ActionIcon>

@@ -36,6 +36,24 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
 
+  // Check for impersonation
+  const checkImpersonation = (originalUser: User | null) => {
+    const isImpersonating =
+      localStorage.getItem('impersonation_active') === 'true';
+    const targetUserId = localStorage.getItem('impersonation_target_user');
+
+    if (isImpersonating && targetUserId && originalUser) {
+      // Create a modified user object for impersonation
+      return {
+        ...originalUser,
+        id: targetUserId,
+        // Keep original user data but change the ID for context switching
+      };
+    }
+
+    return originalUser;
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -53,7 +71,10 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
 
         if (mounted) {
           setSession(initialSession);
-          setUser(initialSession?.user ?? null);
+          const processedUser = checkImpersonation(
+            initialSession?.user ?? null,
+          );
+          setUser(processedUser);
           setLoading(false);
           setInitialized(true);
         }
@@ -76,7 +97,15 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
 
       if (mounted) {
         setSession(newSession);
-        setUser(newSession?.user ?? null);
+        const processedUser = checkImpersonation(newSession?.user ?? null);
+        setUser(processedUser);
+
+        // Clear impersonation on sign out
+        if (event === 'SIGNED_OUT') {
+          localStorage.removeItem('impersonation_active');
+          localStorage.removeItem('impersonation_target_user');
+          localStorage.removeItem('impersonation_original_admin');
+        }
 
         // Only set loading to false after the initial session check
         if (!initialized) {
