@@ -245,6 +245,56 @@ export interface Database {
           updated_at?: string;
         };
       };
+      crafting_orders: {
+        Row: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+          item_id: string;
+          item_name: string;
+          item_icon: string | null;
+          item_tier: string | null;
+          quantity: number;
+          sector: string | null;
+          status: 'unassigned' | 'assigned' | 'completed';
+          placed_by: string;
+          claimed_by: string | null;
+          completed_at: string | null;
+          completed_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          item_id: string;
+          item_name: string;
+          item_icon?: string | null;
+          item_tier?: string | null;
+          quantity: number;
+          sector?: string | null;
+          status?: 'unassigned' | 'assigned' | 'completed';
+          placed_by: string;
+          claimed_by?: string | null;
+          completed_at?: string | null;
+          completed_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          item_id?: string;
+          item_name?: string;
+          item_icon?: string | null;
+          item_tier?: string | null;
+          quantity?: number;
+          sector?: string | null;
+          status?: 'unassigned' | 'assigned' | 'completed';
+          placed_by?: string;
+          claimed_by?: string | null;
+          completed_at?: string | null;
+          completed_by?: string | null;
+        };
+      };
     };
     Views: {
       [_ in never]: never;

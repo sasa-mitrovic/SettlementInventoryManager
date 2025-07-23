@@ -15,6 +15,7 @@ import {
   Badge,
   ActionIcon,
   Tooltip,
+  Tabs,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
@@ -24,12 +25,14 @@ import {
   IconRefresh,
   IconUser,
   IconTrash,
+  IconShield,
 } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { supabaseClient } from '../supabase/supabaseClient';
-import { PermissionGate } from '../components/PermissionGate';
-import { useOptimizedUser } from '../supabase/loader';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
+import { useAuth } from '../components/AuthProvider';
+import { PermissionGate } from '../components/PermissionGate';
+import { RolePermissionManagement } from '../components/RolePermissionManagement';
 
 interface UserProfile {
   id: string;
@@ -61,33 +64,46 @@ export function Settings() {
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
-  const { user } = useOptimizedUser();
+  // Use AuthProvider for reliable authentication state
+  const { user: authUser, loading: authLoading, initialized } = useAuth();
   const { userProfile } = useOptimizedUserWithProfile();
+
   const fetchUsers = async () => {
     try {
-      const { data: usersData, error: usersError } = await supabaseClient
-        .from('user_profiles')
-        .select(
-          `
-          id,
-          email,
-          first_name,
-          last_name,
-          in_game_name,
-          is_active,
-          created_at,
-          role_id,
-          roles(id, name, description)
-        `,
-        )
-        .order('created_at', { ascending: false });
+      // Wait for auth to be initialized and ensure we have a user
+      if (!initialized || authLoading) {
+        return; // Don't fetch yet, auth is still loading
+      }
+
+      if (!authUser?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      // Use the admin function to bypass RLS issues
+      const { data: usersData, error: usersError } = await supabaseClient.rpc(
+        'get_all_users_for_admin',
+        { requesting_user_id: authUser.id },
+      );
 
       if (usersError) throw usersError;
 
       // Transform the data to match our interface
-      const transformedUsers = (usersData || []).map((user: any) => ({
-        ...user,
-        role: user.roles,
+      const transformedUsers = (usersData || []).map((userData: any) => ({
+        id: userData.id,
+        email: userData.email,
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+        in_game_name: userData.in_game_name,
+        is_active: userData.is_active,
+        created_at: userData.created_at,
+        role_id: userData.role_id,
+        role: userData.role_name
+          ? {
+              id: userData.role_id,
+              name: userData.role_name,
+              description: userData.role_description,
+            }
+          : null,
       }));
 
       setUsers(transformedUsers);
@@ -117,7 +133,7 @@ export function Settings() {
   };
 
   const updateUserRole = async (userId: string, roleId: string | null) => {
-    if (!user) return;
+    if (!authUser) return;
 
     setUpdatingUserId(userId);
     try {
@@ -165,7 +181,7 @@ export function Settings() {
 
   // Delete user function
   const deleteUser = async (targetUser: UserProfile) => {
-    if (!user || !canDeleteUser(targetUser)) return;
+    if (!authUser || !canDeleteUser(targetUser)) return;
 
     setDeletingUserId(targetUser.id);
 
@@ -225,12 +241,17 @@ export function Settings() {
 
   useEffect(() => {
     const loadData = async () => {
+      // Only load data once auth is initialized
+      if (!initialized || authLoading) {
+        return;
+      }
+
       setLoading(true);
       await Promise.all([fetchUsers(), fetchRoles()]);
       setLoading(false);
     };
     loadData();
-  }, []);
+  }, [initialized, authLoading, authUser]); // Depend on auth state
 
   const getRoleBadgeColor = (roleName: string | null) => {
     switch (roleName?.toLowerCase()) {
@@ -258,11 +279,23 @@ export function Settings() {
     return user.email;
   };
 
-  if (loading) {
+  // Show loading if auth is still initializing OR data is loading
+  if (!initialized || authLoading || loading) {
     return (
       <Center h={400}>
         <Loader size="lg" />
       </Center>
+    );
+  }
+
+  // Show error if not authenticated after initialization
+  if (initialized && !authUser) {
+    return (
+      <Container size="xl" py="md">
+        <Alert color="red" title="Authentication Required">
+          You must be logged in to access this page.
+        </Alert>
+      </Container>
     );
   }
 
@@ -301,6 +334,7 @@ export function Settings() {
             </Alert>
           )}
 
+          {/* User Role Management Section */}
           <Paper withBorder shadow="sm" radius="md" p="xl">
             <Stack gap="md">
               <Group>
@@ -422,6 +456,11 @@ export function Settings() {
               )}
             </Stack>
           </Paper>
+
+          {/* Role & Permission Management - Super Admin Only */}
+          {userProfile?.role?.name?.toLowerCase() === 'super_admin' && (
+            <RolePermissionManagement />
+          )}
         </Stack>
       </Container>
     </PermissionGate>
