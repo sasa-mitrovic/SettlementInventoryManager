@@ -1,8 +1,7 @@
-import { useStore } from '@nanostores/react';
 import { User } from '@supabase/supabase-js';
 import { PropsWithChildren } from 'react';
 import { Navigate } from 'react-router-dom';
-import { $currUser } from '../global-state/user';
+import { useAuth } from './AuthProvider';
 
 interface ProtectedPathProps extends PropsWithChildren {
   redirectUrl: string;
@@ -14,7 +13,12 @@ export const ProtectedPath = ({
   redirectUrl,
   shouldRedirect,
 }: ProtectedPathProps) => {
-  const user = useStore($currUser);
+  const { user, loading } = useAuth();
+
+  // Show loading state while checking authentication
+  if (loading) {
+    return null; // Or a loading component
+  }
 
   if (shouldRedirect ? shouldRedirect(user) : user == null) {
     return <Navigate to={redirectUrl} />;

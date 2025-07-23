@@ -3,12 +3,14 @@ import { ProtectedPath } from '../components/ProtectedPath';
 import { Authentication } from '../views/Auth';
 import { Signup } from '../views/Signup';
 import { PermissionsDemo } from '../views/PermissionsDemo';
+import { AuthDebugView } from '../views/AuthDebugView';
 import App from '../views/Main/App';
 import { AppLayout } from '../views/Main/AppLayout';
 import { Dashboard } from '../views/Dashboard';
 import { Members } from '../views/Members';
 import { Inventory } from '../views/Inventory';
 import { Settings } from '../views/Settings';
+import { CraftingOrders } from '../views/CraftingOrders';
 
 export const router = createBrowserRouter([
   {
@@ -32,6 +34,10 @@ export const router = createBrowserRouter([
         element: <Inventory />,
       },
       {
+        path: '/crafting-orders',
+        element: <CraftingOrders />,
+      },
+      {
         path: '/settings',
         element: <Settings />,
       },
@@ -42,6 +48,10 @@ export const router = createBrowserRouter([
       {
         path: '/permissions-demo',
         element: <PermissionsDemo />,
+      },
+      {
+        path: '/auth-debug',
+        element: <AuthDebugView />,
       },
     ],
   },

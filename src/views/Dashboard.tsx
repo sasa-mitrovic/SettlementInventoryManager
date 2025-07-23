@@ -12,15 +12,17 @@ import {
 import {
   IconUsers,
   IconPackage,
-  IconChartBar,
+  IconHammer,
   IconSettings,
 } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
 import { PermissionGate } from '../components/PermissionGate';
+import { useCraftingOrderCounts } from '../hooks/useCraftingOrderCounts';
 
 export function Dashboard() {
   const { userProfile, loading } = useOptimizedUserWithProfile();
+  const { counts, loading: countsLoading } = useCraftingOrderCounts();
 
   if (loading) {
     return (
@@ -117,29 +119,46 @@ export function Dashboard() {
           <Grid.Col span={{ base: 12, md: 6 }}>
             <Paper withBorder shadow="sm" radius="md" p="xl" h="100%">
               <Stack gap="md" align="center">
-                <IconChartBar size={48} color="var(--mantine-color-orange-6)" />
+                <IconHammer size={48} color="var(--mantine-color-orange-6)" />
                 <Title order={3} ta="center">
-                  Reports & Analytics
+                  Crafting Orders
                 </Title>
                 <Text ta="center" c="dimmed">
-                  View settlement reports and performance analytics
+                  Manage crafting orders and track completion status
                 </Text>
+                {!countsLoading && (
+                  <Group gap="md">
+                    <Text size="sm" c="dimmed">
+                      <Text component="span" fw={600} c="red">
+                        {counts.unassigned_count}
+                      </Text>{' '}
+                      Unassigned
+                    </Text>
+                    <Text size="sm" c="dimmed">
+                      <Text component="span" fw={600} c="yellow">
+                        {counts.assigned_count}
+                      </Text>{' '}
+                      Assigned
+                    </Text>
+                  </Group>
+                )}
                 <PermissionGate
-                  permission="reports.read"
+                  permission="orders.read"
                   fallback={
                     <Text c="red" size="sm" ta="center">
-                      You need 'reports.read' permission to access this page
+                      You need 'orders.read' permission to access this page
                     </Text>
                   }
                 >
                   <Button
-                    leftSection={<IconChartBar size={16} />}
+                    component={Link}
+                    to="/crafting-orders"
+                    leftSection={<IconHammer size={16} />}
                     variant="light"
                     size="md"
                     fullWidth
-                    disabled
                   >
-                    Coming Soon
+                    View Crafting Orders
                   </Button>
                 </PermissionGate>
               </Stack>

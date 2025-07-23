@@ -40,8 +40,31 @@ Create fully type safe endpoints by running `yarn typegen`.
 ## Prettier
 
 Is installed as a dev dependency and `.vscode` recommends installing it as an editor plugin.  
-Format on save is enabled for a reason. Dont write ugly code.  
+Format on save is enabled for a reason. Dont write ugly code.
 
 ## Supabase credentials are stored in .env
 
 App will error if no supabase keys are present. Obtain them at `https://supabase.com/dashboard/{YOUR_PROJECT}/settings/general`
+
+## Role & Permission Management Setup
+
+If you encounter RLS (Row Level Security) errors when trying to create permissions or roles, follow these steps:
+
+### Quick Fix for RLS Permission Issues
+
+1. Go to your Supabase dashboard → SQL Editor
+2. Run the `fix_rls_permissions.sql` script found in the project root
+3. This will:
+   - Make your current user a super_admin
+   - Set up proper RLS policies for permissions, roles, and role_permissions tables
+   - Allow super_admin users to manage the permission system
+
+### Manual Setup
+
+If you need to manually set up a super_admin user:
+
+1. Run the `setup_super_admin.sql` script
+2. Replace `'your-email@example.com'` with your actual email address
+3. Then run the `role_permission_rls_policies.sql` script
+
+The role permission management feature is only accessible to users with the `super_admin` role for security reasons.
