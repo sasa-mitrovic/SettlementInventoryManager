@@ -8,6 +8,7 @@ import { mantineModals } from './mantine/modals/modals.tsx';
 import { mantineTheme } from './mantine/theme.ts';
 import { router } from './router/router.tsx';
 import { PermissionProvider } from './supabase/optimizedRoleHooks.tsx';
+import { AuthProvider } from './components/AuthProvider.tsx';
 
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
@@ -19,11 +20,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <MantineProvider theme={mantineTheme} defaultColorScheme="auto">
       <Notifications />
       <CustomSpotlight />
-      <ModalsProvider modals={mantineModals}>
-        <PermissionProvider>
-          <RouterProvider router={router} />
-        </PermissionProvider>
-      </ModalsProvider>
+      <AuthProvider>
+        <ModalsProvider modals={mantineModals}>
+          <PermissionProvider>
+            <RouterProvider router={router} />
+          </PermissionProvider>
+        </ModalsProvider>
+      </AuthProvider>
     </MantineProvider>
   </React.StrictMode>,
 );

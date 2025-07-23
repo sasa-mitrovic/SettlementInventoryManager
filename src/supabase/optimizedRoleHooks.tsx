@@ -9,6 +9,7 @@ import {
 import { User } from '@supabase/supabase-js';
 import { supabaseClient } from './supabaseClient';
 import { UserWithRole, UserPermissions } from './supabase';
+import { useAuth } from '../components/AuthProvider';
 
 interface CachedUserData {
   user: User | null;
@@ -37,25 +38,24 @@ interface PermissionProviderProps {
 }
 
 export function PermissionProvider({ children }: PermissionProviderProps) {
+  const { user } = useAuth();
   const [cachedData, setCachedData] = useState<CachedUserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchAllUserData = useCallback(async () => {
+    // Don't fetch if no user is authenticated
+    if (!user) {
+      setCachedData(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      const {
-        data: { user },
-      } = await supabaseClient.auth.getUser();
-
-      if (!user) {
-        setCachedData(null);
-        return;
-      }
-
-      // Fetch profile and permissions in parallel
+      // Fetch profile and permissions in parallel using the user from auth context
       const [profileResult, permissionsResult] = await Promise.all([
         supabaseClient
           .from('user_profiles')
@@ -111,7 +111,7 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   const refetch = useCallback(async () => {
     await fetchAllUserData();
