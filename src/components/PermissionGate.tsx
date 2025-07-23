@@ -80,9 +80,9 @@ interface RoleGateProps {
  */
 export function RoleGate({
   children,
-  roles,
-  fallback = null,
-  loading: customLoading,
+  roles: _roles,
+  fallback: _fallback = null,
+  loading: _customLoading,
 }: RoleGateProps) {
   // This would require a role hook - we can implement this if needed
   // For now, we'll just return the children as this is less common than permission-based access
