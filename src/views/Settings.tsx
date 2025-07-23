@@ -15,7 +15,6 @@ import {
   Badge,
   ActionIcon,
   Tooltip,
-  Tabs,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
@@ -25,7 +24,6 @@ import {
   IconRefresh,
   IconUser,
   IconTrash,
-  IconShield,
 } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { supabaseClient } from '../supabase/supabaseClient';
