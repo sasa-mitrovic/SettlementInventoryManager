@@ -369,9 +369,12 @@ export function CraftingOrders() {
       console.log('Attempting to cancel order:', orderId);
 
       // Use the database function to handle cancellation with proper permissions
-      const { data, error } = await supabaseClient.rpc('cancel_crafting_order', {
-        order_id: orderId,
-      });
+      const { data, error } = await supabaseClient.rpc(
+        'cancel_crafting_order',
+        {
+          order_id: orderId,
+        },
+      );
 
       console.log('Cancel result:', { data, error });
 
@@ -604,7 +607,7 @@ export function CraftingOrders() {
           <Group>
             <Button
               component={Link}
-              to="/dashboard"
+              to="/"
               leftSection={<IconArrowLeft size={16} />}
               variant="light"
             >
