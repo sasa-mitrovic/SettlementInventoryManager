@@ -19,6 +19,8 @@ import {
   UnstyledButton,
   useComputedColorScheme,
   Tooltip,
+  Pagination,
+  Avatar,
 } from '@mantine/core';
 import {
   IconPackage,
@@ -28,13 +30,16 @@ import {
   IconChevronUp,
   IconChevronDown,
   IconSelector,
+  IconHammer,
 } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { PermissionGate } from '../components/PermissionGate';
 import { useHasAnyPermission } from '../supabase/optimizedRoleHooks';
 import { useOptimizedUser } from '../supabase/loader';
-import { useDebouncedValue } from '@mantine/hooks';
+import { useDebouncedValue, useDisclosure } from '@mantine/hooks';
+import { CraftingOrderModal } from '../components/CraftingOrderModal';
+import { useBitjitaItems } from '../services/bitjitaItemsCache';
 
 interface InventoryItem {
   id: string;
@@ -109,6 +114,19 @@ export function Inventory() {
   });
   const [targetInputs, setTargetInputs] = useState<Record<string, number>>({});
 
+  // Pagination state for combined totals
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(50); // Show 50 items per page
+
+  // Crafting Order Modal state
+  const [modalOpened, { open: openModal, close: closeModal }] =
+    useDisclosure(false);
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [selectedItemTarget, setSelectedItemTarget] = useState<{
+    currentQuantity: number;
+    targetQuantity: number;
+  } | null>(null);
+
   const computedColorScheme = useComputedColorScheme('light');
   const { user } = useOptimizedUser();
   const { hasAnyPermission: canEditTargets } = useHasAnyPermission([
@@ -116,6 +134,8 @@ export function Inventory() {
     'users.manage_roles',
   ]);
 
+  // Get global items from cache
+  const { items: globalItems, loading: globalItemsLoading } = useBitjitaItems();
   // Theme-aware color function for target highlighting
   const getTargetColors = () => {
     if (computedColorScheme === 'dark') {
@@ -285,7 +305,7 @@ export function Inventory() {
 
       await fetchTargets();
     } catch (err) {
-      console.error('Failed to update target:', err);
+      // Error is handled silently to avoid exposing sensitive data
     }
   };
 
@@ -314,6 +334,27 @@ export function Inventory() {
     }
   };
 
+  const handleCreateCraftingOrder = (item: CombinedInventoryItem) => {
+    setSelectedItem(item.item_name);
+
+    // Set target information if available
+    if (item.target_quantity && item.target_quantity > 0) {
+      setSelectedItemTarget({
+        currentQuantity: item.total_quantity,
+        targetQuantity: item.target_quantity,
+      });
+    } else {
+      setSelectedItemTarget(null);
+    }
+
+    openModal();
+  };
+
+  const handleModalSuccess = () => {
+    // Optionally refresh data or show success message
+    // The modal already shows success notifications
+  };
+
   const getTargetInputValue = (itemName: string, currentTarget?: number) => {
     // Return local input value if it exists, otherwise return the current target
     return targetInputs[itemName] !== undefined
@@ -321,8 +362,9 @@ export function Inventory() {
       : currentTarget || 0;
   };
 
-  const getRarityColor = (rarity: string | null) => {
-    switch (rarity?.toLowerCase()) {
+  const getRarityColor = (rarity: string | null | undefined) => {
+    const rarityStr = rarity?.toLowerCase();
+    switch (rarityStr) {
       case 'common':
         return 'gray';
       case 'uncommon':
@@ -336,6 +378,61 @@ export function Inventory() {
       default:
         return 'gray';
     }
+  };
+
+  // Generate initials from item name (first letter of first two words)
+  const getItemInitials = (itemName: string) => {
+    const words = itemName.trim().split(/\s+/);
+    if (words.length >= 2) {
+      return (words[0][0] || '') + (words[1][0] || '');
+    } else if (words.length === 1) {
+      return words[0][0] || 'I';
+    }
+    return 'I';
+  };
+
+  // Item icon component with avatar fallback
+  const ItemIcon = ({
+    item,
+  }: {
+    item: { icon: string | null; item_name: string };
+  }) => {
+    const [imageError, setImageError] = useState(false);
+
+    if (!item.icon || imageError) {
+      return (
+        <Avatar
+          size={24}
+          radius="sm"
+          style={{
+            backgroundColor: 'var(--mantine-color-blue-6)',
+            color: 'white',
+            fontSize: '10px',
+          }}
+        >
+          {getItemInitials(item.item_name)}
+        </Avatar>
+      );
+    }
+
+    return (
+      <Image
+        src={`https://bitjita.com/${
+          item.icon.startsWith('GeneratedIcons/Other/GeneratedIcons')
+            ? item.icon.slice(20)
+            : item.icon.startsWith('GeneratedIcons/Items') ||
+                item.icon.startsWith('GeneratedIcons/Cargo') ||
+                item.icon.startsWith('GeneratedIcons/Other')
+              ? item.icon
+              : 'GeneratedIcons/' + item.icon
+        }.webp`}
+        alt={item.item_name}
+        w={24}
+        h={24}
+        fit="contain"
+        onError={() => setImageError(true)}
+      />
+    );
   };
 
   // Package calculation utilities
@@ -366,7 +463,7 @@ export function Inventory() {
     const combined: { [key: string]: CombinedInventoryItem } = {};
     let packageDetectionCount = 0; // Debug counter
 
-    // First pass: process all items and handle packages
+    // First pass: process all settlement inventory items and handle packages
     inventory.forEach((item) => {
       const packageInfo = getPackageInfo(item.item_name);
       const key = packageInfo.baseItemName; // Use base item name as key
@@ -374,9 +471,6 @@ export function Inventory() {
 
       if (packageInfo.isPackage) {
         packageDetectionCount++;
-        console.log(
-          `📦 Package detected: "${item.item_name}" -> "${packageInfo.baseItemName}" (${item.quantity} × ${packageInfo.multiplier} = ${effectiveQuantity})`,
-        );
       }
 
       if (combined[key]) {
@@ -446,10 +540,31 @@ export function Inventory() {
       }
     });
 
+    // Second pass: Add items from global cache that aren't in settlement inventory
+    globalItems.forEach((globalItem) => {
+      const packageInfo = getPackageInfo(globalItem.name);
+      const key = packageInfo.baseItemName;
+
+      // Only add if not already in settlement inventory
+      if (!combined[key]) {
+        const newItem: CombinedInventoryItem = {
+          item_name: packageInfo.baseItemName,
+          tier: globalItem.tier ? parseInt(globalItem.tier) : null,
+          rarity: globalItem.rarityStr || globalItem.rarity || null,
+          total_quantity: 0, // Not in settlement, so quantity is 0
+          icon: globalItem.iconAssetName || globalItem.icon || null,
+          package_breakdown: {
+            base_quantity: 0,
+            package_items: [],
+          },
+        };
+
+        combined[key] = newItem;
+      }
+    });
+
     if (packageDetectionCount > 0) {
-      console.log(
-        `🎯 Package system processed ${packageDetectionCount} packaged items`,
-      );
+      // Package detection completed successfully
     }
 
     // Add target information
@@ -504,7 +619,19 @@ export function Inventory() {
     );
   };
 
-  if (loading) {
+  // Pagination helper function for combined totals
+  const getPaginatedItems = (items: CombinedInventoryItem[]) => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return items.slice(startIndex, endIndex);
+  };
+
+  // Get total pages for pagination
+  const getTotalPages = (totalItems: number) => {
+    return Math.ceil(totalItems / itemsPerPage);
+  };
+
+  if (loading || globalItemsLoading) {
     return (
       <Center h={400}>
         <Loader size="lg" />
@@ -603,28 +730,7 @@ export function Inventory() {
                             <Table.Tr key={item.id}>
                               <Table.Td>
                                 <Group gap="sm">
-                                  {item.icon && (
-                                    <Image
-                                      src={`https://bitjita.com/${
-                                        item.icon.startsWith(
-                                          'GeneratedIcons/Other',
-                                        )
-                                          ? item.icon.slice(20)
-                                          : item.icon.startsWith(
-                                                'GeneratedIcons/Items',
-                                              ) ||
-                                              item.icon.startsWith(
-                                                'GeneratedIcons/Cargo',
-                                              )
-                                            ? item.icon
-                                            : 'GeneratedIcons/' + item.icon
-                                      }.webp`}
-                                      alt={item.item_name}
-                                      w={24}
-                                      h={24}
-                                      fit="contain"
-                                    />
-                                  )}
+                                  <ItemIcon item={item} />
                                   <Text fw={500}>{item.item_name}</Text>
                                 </Group>
                               </Table.Td>
@@ -654,174 +760,213 @@ export function Inventory() {
                 ))}
             </Accordion>
           ) : (
-            // Combined totals view
-            <Table striped highlightOnHover withTableBorder>
-              <Table.Thead>
-                <Table.Tr>
-                  <SortableHeader field="item_name">Item</SortableHeader>
-                  <SortableHeader field="tier">Tier</SortableHeader>
-                  <SortableHeader field="rarity">Rarity</SortableHeader>
-                  <SortableHeader field="total_quantity">
-                    Total Quantity
-                  </SortableHeader>
-                  <SortableHeader field="target_quantity">
-                    Target
-                  </SortableHeader>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {sortItems(filterItems(getCombinedInventory())).map((item) => {
-                  const hasTarget =
-                    item.target_quantity && item.target_quantity > 0;
-                  const isAboveTarget =
-                    hasTarget && item.total_quantity >= item.target_quantity!;
-                  const isBelowTarget =
-                    hasTarget && item.total_quantity < item.target_quantity!;
+            // Combined totals view with pagination
+            <Stack gap="md">
+              <Table striped highlightOnHover withTableBorder>
+                <Table.Thead>
+                  <Table.Tr>
+                    <SortableHeader field="item_name">Item</SortableHeader>
+                    <SortableHeader field="tier">Tier</SortableHeader>
+                    <SortableHeader field="rarity">Rarity</SortableHeader>
+                    <SortableHeader field="total_quantity">
+                      Total Quantity
+                    </SortableHeader>
+                    <SortableHeader field="target_quantity">
+                      Target
+                    </SortableHeader>
+                    <Table.Th>Actions</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {(() => {
+                    const allItems = sortItems(
+                      filterItems(getCombinedInventory()),
+                    );
+                    const paginatedItems = getPaginatedItems(allItems);
 
-                  return (
-                    <Table.Tr key={item.item_name}>
-                      <Table.Td>
-                        <Group gap="sm">
-                          {item.icon && (
-                            <Image
-                              src={`https://bitjita.com/${
-                                item.icon.startsWith('GeneratedIcons/Other')
-                                  ? item.icon.slice(20)
-                                  : item.icon.startsWith(
-                                        'GeneratedIcons/Items',
-                                      ) ||
-                                      item.icon.startsWith(
-                                        'GeneratedIcons/Cargo',
-                                      )
-                                    ? item.icon
-                                    : 'GeneratedIcons/' + item.icon
-                              }.webp`}
-                              alt={item.item_name}
-                              w={24}
-                              h={24}
-                              fit="contain"
-                            />
-                          )}
-                          <Text fw={500}>{item.item_name}</Text>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text>{item.tier || 'N/A'}</Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge
-                          color={getRarityColor(item.rarity)}
-                          size="sm"
-                          variant="light"
-                        >
-                          {item.rarity || 'Unknown'}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td
-                        style={{
-                          backgroundColor: isAboveTarget
-                            ? getTargetColors().success
-                            : isBelowTarget
-                              ? getTargetColors().danger
-                              : undefined,
-                        }}
-                      >
-                        {item.package_breakdown &&
-                        (item.package_breakdown.package_items.length > 0 ||
-                          item.package_breakdown.base_quantity > 0) ? (
-                          <Tooltip
-                            label={
-                              <Stack gap="xs">
-                                <Text size="sm" fw={600}>
-                                  Breakdown:
-                                </Text>
-                                {item.package_breakdown.base_quantity > 0 && (
-                                  <Text size="xs">
-                                    Base:{' '}
-                                    {item.package_breakdown.base_quantity.toLocaleString()}
-                                  </Text>
-                                )}
-                                {item.package_breakdown.package_items.map(
-                                  (pkg, index) => (
-                                    <Text key={index} size="xs">
-                                      {pkg.name}:{' '}
-                                      {pkg.quantity.toLocaleString()} ×{' '}
-                                      {pkg.multiplier} ={' '}
-                                      {pkg.contribution.toLocaleString()}
-                                    </Text>
-                                  ),
-                                )}
-                                <Text size="xs" fw={600} c="blue">
-                                  Total: {item.total_quantity.toLocaleString()}
-                                </Text>
-                              </Stack>
-                            }
-                            multiline
-                            w={300}
+                    return paginatedItems.map((item) => {
+                      const hasTarget =
+                        item.target_quantity && item.target_quantity > 0;
+                      const isAboveTarget =
+                        hasTarget &&
+                        item.total_quantity >= item.target_quantity!;
+                      const isBelowTarget =
+                        hasTarget &&
+                        item.total_quantity < item.target_quantity!;
+
+                      return (
+                        <Table.Tr key={item.item_name}>
+                          <Table.Td>
+                            <Group gap="sm">
+                              <ItemIcon item={item} />
+                              <Text fw={500}>{item.item_name}</Text>
+                            </Group>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text>{item.tier || 'N/A'}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge
+                              color={getRarityColor(item.rarity)}
+                              size="sm"
+                              variant="light"
+                            >
+                              {item.rarity || 'Unknown'}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td
+                            style={{
+                              backgroundColor: isAboveTarget
+                                ? getTargetColors().success
+                                : isBelowTarget
+                                  ? getTargetColors().danger
+                                  : undefined,
+                            }}
                           >
-                            <Group gap="xs">
+                            {item.package_breakdown &&
+                            (item.package_breakdown.package_items.length > 0 ||
+                              item.package_breakdown.base_quantity > 0) ? (
+                              <Tooltip
+                                label={
+                                  <Stack gap="xs">
+                                    <Text size="sm" fw={600}>
+                                      Breakdown:
+                                    </Text>
+                                    {item.package_breakdown.base_quantity >
+                                      0 && (
+                                      <Text size="xs">
+                                        Base:{' '}
+                                        {item.package_breakdown.base_quantity.toLocaleString()}
+                                      </Text>
+                                    )}
+                                    {item.package_breakdown.package_items.map(
+                                      (pkg, index) => (
+                                        <Text key={index} size="xs">
+                                          {pkg.name}:{' '}
+                                          {pkg.quantity.toLocaleString()} ×{' '}
+                                          {pkg.multiplier} ={' '}
+                                          {pkg.contribution.toLocaleString()}
+                                        </Text>
+                                      ),
+                                    )}
+                                    <Text size="xs" fw={600} c="blue">
+                                      Total:{' '}
+                                      {item.total_quantity.toLocaleString()}
+                                    </Text>
+                                  </Stack>
+                                }
+                                multiline
+                                w={300}
+                              >
+                                <Group gap="xs">
+                                  <Text fw={600}>
+                                    {item.total_quantity.toLocaleString()}
+                                  </Text>
+                                  {item.package_breakdown.package_items.length >
+                                    0 && (
+                                    <Badge
+                                      size="xs"
+                                      color="blue"
+                                      variant="light"
+                                    >
+                                      📦
+                                    </Badge>
+                                  )}
+                                </Group>
+                              </Tooltip>
+                            ) : (
                               <Text fw={600}>
                                 {item.total_quantity.toLocaleString()}
                               </Text>
-                              {item.package_breakdown.package_items.length >
-                                0 && (
-                                <Badge size="xs" color="blue" variant="light">
-                                  📦
-                                </Badge>
-                              )}
-                            </Group>
-                          </Tooltip>
-                        ) : (
-                          <Text fw={600}>
-                            {item.total_quantity.toLocaleString()}
-                          </Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td
-                        style={{
-                          backgroundColor: isAboveTarget
-                            ? getTargetColors().success
-                            : isBelowTarget
-                              ? getTargetColors().danger
-                              : undefined,
-                        }}
-                      >
-                        {canEditTargets ? (
-                          <NumberInput
-                            value={getTargetInputValue(
-                              item.item_name,
-                              item.target_quantity,
                             )}
-                            onChange={(value) =>
-                              handleTargetInputChange(item.item_name, value)
-                            }
-                            onBlur={() =>
-                              handleTargetSubmit(item.item_name, item.target_id)
-                            }
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter') {
-                                handleTargetSubmit(
-                                  item.item_name,
-                                  item.target_id,
-                                );
-                              }
+                          </Table.Td>
+                          <Table.Td
+                            style={{
+                              backgroundColor: isAboveTarget
+                                ? getTargetColors().success
+                                : isBelowTarget
+                                  ? getTargetColors().danger
+                                  : undefined,
                             }}
-                            min={0}
-                            size="sm"
-                            w={100}
-                            placeholder="0"
-                          />
-                        ) : (
-                          <Text>
-                            {item.target_quantity?.toLocaleString() || '-'}
-                          </Text>
-                        )}
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-            </Table>
+                          >
+                            {canEditTargets ? (
+                              <NumberInput
+                                value={getTargetInputValue(
+                                  item.item_name,
+                                  item.target_quantity,
+                                )}
+                                onChange={(value) =>
+                                  handleTargetInputChange(item.item_name, value)
+                                }
+                                onBlur={() =>
+                                  handleTargetSubmit(
+                                    item.item_name,
+                                    item.target_id,
+                                  )
+                                }
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') {
+                                    handleTargetSubmit(
+                                      item.item_name,
+                                      item.target_id,
+                                    );
+                                  }
+                                }}
+                                min={0}
+                                size="sm"
+                                w={100}
+                                placeholder="0"
+                              />
+                            ) : (
+                              <Text>
+                                {item.target_quantity?.toLocaleString() || '-'}
+                              </Text>
+                            )}
+                          </Table.Td>
+                          <Table.Td>
+                            <Tooltip label="Create crafting order for this item">
+                              <Button
+                                size="xs"
+                                variant="light"
+                                leftSection={<IconHammer size={14} />}
+                                onClick={() => handleCreateCraftingOrder(item)}
+                              >
+                                Craft
+                              </Button>
+                            </Tooltip>
+                          </Table.Td>
+                        </Table.Tr>
+                      );
+                    });
+                  })()}
+                </Table.Tbody>
+              </Table>
+
+              {(() => {
+                const allItems = sortItems(filterItems(getCombinedInventory()));
+                const totalPages = getTotalPages(allItems.length);
+
+                return totalPages > 1 ? (
+                  <Group justify="space-between">
+                    <Text size="sm" c="dimmed">
+                      Showing{' '}
+                      {Math.min(
+                        (currentPage - 1) * itemsPerPage + 1,
+                        allItems.length,
+                      )}{' '}
+                      to {Math.min(currentPage * itemsPerPage, allItems.length)}{' '}
+                      of {allItems.length} items
+                    </Text>
+                    <Pagination
+                      total={totalPages}
+                      value={currentPage}
+                      onChange={setCurrentPage}
+                      size="sm"
+                    />
+                  </Group>
+                ) : null;
+              })()}
+            </Stack>
           )}
 
           {inventory.length === 0 && (
@@ -837,6 +982,15 @@ export function Inventory() {
             </Center>
           )}
         </Stack>
+
+        {/* Crafting Order Modal */}
+        <CraftingOrderModal
+          opened={modalOpened}
+          onClose={closeModal}
+          onSuccess={handleModalSuccess}
+          preselectedItem={selectedItem || undefined}
+          meetTarget={selectedItemTarget || undefined}
+        />
       </Container>
     </PermissionGate>
   );

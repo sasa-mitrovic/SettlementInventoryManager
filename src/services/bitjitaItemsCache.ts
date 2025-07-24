@@ -1,3 +1,4 @@
+import React from 'react';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { notifications } from '@mantine/notifications';
 
@@ -8,9 +9,11 @@ export interface BitjitaItem {
   category?: string;
   subcategory?: string;
   rarity?: string;
+  rarityStr?: string; // String representation of rarity
   tier?: string;
   type?: string;
   icon?: string;
+  iconAssetName?: string; // Alternative icon field
   value?: number;
   // Add other properties as needed based on API response
 }
@@ -32,7 +35,6 @@ class BitjitaItemsCache {
   private readonly CACHE_DURATION = 5 * 60 * 1000;
   private readonly STORAGE_KEY = 'bitjita_items_cache';
   private readonly VERSION = 1; // Increment when cache structure changes
-  private readonly DEBUG = true; // Set to false in production
 
   private constructor() {
     this.loadFromLocalStorage();
@@ -45,10 +47,8 @@ class BitjitaItemsCache {
     return BitjitaItemsCache.instance;
   }
 
-  private log(message: string, ...args: any[]): void {
-    if (this.DEBUG) {
-      console.log(`[BitjitaCache] ${message}`, ...args);
-    }
+  private log(_message: string, ..._args: any[]): void {
+    // Debug logging disabled for production
   }
 
   private loadFromLocalStorage(): void {
@@ -67,7 +67,6 @@ class BitjitaItemsCache {
         }
       }
     } catch (error) {
-      console.warn('Failed to load cache from localStorage:', error);
       localStorage.removeItem(this.STORAGE_KEY);
     }
   }
@@ -80,7 +79,7 @@ class BitjitaItemsCache {
           `Saved ${this.cache.items.length} items to localStorage cache`,
         );
       } catch (error) {
-        console.warn('Failed to save cache to localStorage:', error);
+        // Silent error handling for production
       }
     }
   }
@@ -122,7 +121,6 @@ class BitjitaItemsCache {
 
     // Ensure we have an array
     if (!Array.isArray(itemsArray)) {
-      console.error('Unexpected API response structure:', data);
       throw new Error(
         `API response is not an array. Got: ${typeof itemsArray}. Structure: ${JSON.stringify(data).substring(0, 200)}...`,
       );
@@ -176,8 +174,6 @@ class BitjitaItemsCache {
         return items;
       })
       .catch((error) => {
-        console.error('Failed to fetch items from API:', error);
-
         // If we have stale cache, return it as fallback
         if (this.cache && this.cache.items.length > 0) {
           this.log('Using stale cache as fallback');
@@ -232,7 +228,6 @@ class BitjitaItemsCache {
     try {
       await this.getItems(true);
     } catch (error) {
-      console.warn('Background refresh failed:', error);
       // Don't show notifications for background failures
     }
   }
@@ -257,7 +252,7 @@ class BitjitaItemsCache {
       try {
         listener(items);
       } catch (error) {
-        console.error('Error in cache listener:', error);
+        // Silent error handling for production
       }
     });
   }
@@ -269,7 +264,6 @@ class BitjitaItemsCache {
         await this.getItems();
         this.log('Preload completed successfully');
       } catch (error) {
-        console.warn('Preload failed:', error);
         // Don't throw - this is just preloading
       }
     } else {
@@ -339,5 +333,3 @@ export const useBitjitaItems = () => {
     isCacheValid: bitjitaItemsCache.isCacheValid(),
   };
 };
-
-import React from 'react';
