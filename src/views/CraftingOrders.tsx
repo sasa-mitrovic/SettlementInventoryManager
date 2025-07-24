@@ -84,7 +84,7 @@ export function CraftingOrders() {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsLoaded, setItemsLoaded] = useState(false); // Track if items have been loaded
   const [searchValue, setSearchValue] = useState('');
-  const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const filterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Handle search with debouncing and cancellation
   const handleSearchChange = useCallback(
@@ -366,12 +366,24 @@ export function CraftingOrders() {
 
   const cancelOrder = async (orderId: string) => {
     try {
-      const { error } = await supabaseClient
-        .from('crafting_orders')
-        .delete()
-        .eq('id', orderId);
+      console.log('Attempting to cancel order:', orderId);
 
-      if (error) throw error;
+      // Use the database function to handle cancellation with proper permissions
+      const { data, error } = await supabaseClient.rpc('cancel_crafting_order', {
+        order_id: orderId,
+      });
+
+      console.log('Cancel result:', { data, error });
+
+      if (error) {
+        console.error('Database error:', error);
+        throw error;
+      }
+
+      // Check the response from our database function
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to cancel order');
+      }
 
       notifications.show({
         title: 'Order Cancelled',
@@ -512,6 +524,12 @@ export function CraftingOrders() {
     return (
       order.placed_by === userProfile.id || order.claimed_by === userProfile.id
     );
+  };
+
+  const canCancelOrder = (order: CraftingOrder) => {
+    if (!userProfile) return false;
+    // Only the person who placed the order can cancel it
+    return order.placed_by === userProfile.id;
   };
 
   const formatUserName = (profile?: {
@@ -708,8 +726,7 @@ export function CraftingOrders() {
                           </Button>
                         )}
                       {order.status !== 'completed' &&
-                        userProfile &&
-                        order.placed_by === userProfile.id && (
+                        canCancelOrder(order) && (
                           <Button
                             size="xs"
                             color="red"
