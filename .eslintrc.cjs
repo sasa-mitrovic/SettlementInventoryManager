@@ -14,5 +14,23 @@ module.exports = {
       'warn',
       { allowConstantExport: true },
     ],
+    // Unused imports and variables
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      {
+        vars: 'all',
+        args: 'after-used',
+        ignoreRestSiblings: true,
+        varsIgnorePattern: '^_',
+        argsIgnorePattern: '^_',
+      },
+    ],
+    'no-unused-vars': 'off', // Turn off base rule as it can report incorrect errors
+
+    // Import/export rules
+    'no-duplicate-imports': 'error',
+
+    // React specific unused rules
+    'react-hooks/exhaustive-deps': 'warn',
   },
-}
+};
