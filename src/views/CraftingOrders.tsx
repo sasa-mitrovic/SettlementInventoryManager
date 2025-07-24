@@ -32,7 +32,7 @@ import {
 import { Link } from 'react-router-dom';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
-import { useBitjitaItems, BitjitaItem } from '../services/bitjitaItemsCache';
+import { useUnifiedItems, UnifiedItem } from '../services/unifiedItemService';
 
 interface CraftingOrder {
   id: string;
@@ -74,15 +74,14 @@ export function CraftingOrders() {
   const [modalOpened, { open: openModal, close: closeModal }] =
     useDisclosure(false);
 
-  // Use the cached items service
+  // Use the unified items service
   const {
     items: allItems,
     loading: itemsLoading,
-    error: itemsError,
     isCacheValid,
-  } = useBitjitaItems();
+  } = useUnifiedItems();
 
-  const [filteredItems, setFilteredItems] = useState<BitjitaItem[]>([]);
+  const [filteredItems, setFilteredItems] = useState<UnifiedItem[]>([]);
   const [searchValue, setSearchValue] = useState('');
   const filterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -113,7 +112,7 @@ export function CraftingOrders() {
         } else {
           const searchLower = value.toLowerCase();
           const filtered = allItems.filter(
-            (item: BitjitaItem) =>
+            (item: UnifiedItem) =>
               item.name.toLowerCase().includes(searchLower) &&
               !item.name.endsWith('Output'),
           );
@@ -415,7 +414,7 @@ export function CraftingOrders() {
       const { error } = await supabaseClient.from('crafting_orders').insert({
         item_id: parseInt(selectedItem.id), // Convert string back to number for database
         item_name: selectedItem.name,
-        item_icon: selectedItem.icon,
+        item_icon: selectedItem.iconAssetName,
         item_tier: selectedItem.tier,
         quantity: values.quantity,
         sector: values.sector,
@@ -496,7 +495,7 @@ export function CraftingOrders() {
       }
     }
 
-    return selectItems.map((item: BitjitaItem) => ({
+    return selectItems.map((item: UnifiedItem) => ({
       value: item.id,
       label: `${item.name} (${item.tier || 'Unknown'})`,
       item: item, // Store full item for rendering
@@ -508,15 +507,7 @@ export function CraftingOrders() {
   }, []);
 
   // Display any item loading errors
-  useEffect(() => {
-    if (itemsError) {
-      notifications.show({
-        title: 'Error Loading Items',
-        message: itemsError,
-        color: 'red',
-      });
-    }
-  }, [itemsError]);
+  // Remove error handling as unified service handles errors internally
 
   if (loading) {
     return (
@@ -710,11 +701,11 @@ export function CraftingOrders() {
                 </Text>
                 {isCacheValid ? (
                   <Badge size="xs" color="green" variant="light">
-                    Items Cached
+                    Items & Cargos Cached
                   </Badge>
                 ) : (
                   <Badge size="xs" color="gray" variant="light">
-                    Loading Items...
+                    Loading...
                   </Badge>
                 )}
               </Group>

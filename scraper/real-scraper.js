@@ -25,6 +25,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 class BitjitaRealScraper {
   constructor() {
     this.settlementUrl = 'https://bitjita.com/claims/144115188105096768';
+    this.inventoryApiUrl =
+      'https://bitjita.com/api/claims/144115188105096768/inventories';
     this.baseUrl = 'https://bitjita.com';
   }
 
@@ -50,7 +52,187 @@ class BitjitaRealScraper {
     }
   }
 
+  async fetchInventoryFromAPI() {
+    try {
+      console.log(`Fetching inventory data from API: ${this.inventoryApiUrl}`);
+      const response = await fetch(this.inventoryApiUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✓ Successfully fetched inventory data from API');
+      return data;
+    } catch (error) {
+      console.error('Error fetching inventory from API:', error);
+      throw error;
+    }
+  }
+
   async scrapeInventoryData() {
+    try {
+      // Try API first, fallback to HTML scraping if API fails
+      try {
+        return await this.scrapeInventoryFromAPI();
+      } catch (apiError) {
+        console.warn(
+          '⚠️ API fetch failed, falling back to HTML scraping:',
+          apiError.message,
+        );
+        return await this.scrapeInventoryFromHTML();
+      }
+    } catch (error) {
+      console.error('Error scraping inventory data:', error);
+      return [];
+    }
+  }
+
+  async scrapeInventoryFromAPI() {
+    try {
+      const apiData = await this.fetchInventoryFromAPI();
+      const inventoryItems = [];
+
+      if (!apiData) {
+        console.log('❌ No inventory data found from API');
+        return inventoryItems;
+      }
+
+      console.log('Processing inventory data from API...');
+
+      // We need item lookup data for name resolution
+      // Fall back to HTML scraping to get the item/cargo lookup data
+      console.log(
+        '📋 Fetching item lookup data from HTML for name resolution...',
+      );
+      const html = await this.fetchPageContent(this.settlementUrl);
+      const settlementData = await this.parseDataFromScripts(html);
+
+      // Create lookup maps for items and cargos
+      const itemMap = new Map();
+      const cargoMap = new Map();
+
+      if (settlementData && settlementData.items && settlementData.cargos) {
+        // Parse items data
+        settlementData.items.forEach((item) => {
+          if (item.id && item.name) {
+            itemMap.set(item.id, {
+              name: item.name,
+              tier: item.tier,
+              rarity: item.rarityStr || 'Common',
+              iconAssetName: item.iconAssetName,
+            });
+          }
+        });
+
+        // Parse cargos data
+        settlementData.cargos.forEach((cargo) => {
+          if (cargo.id && cargo.name) {
+            cargoMap.set(cargo.id, {
+              name: cargo.name,
+              tier: cargo.tier,
+              rarity: cargo.rarityStr || 'Common',
+              iconAssetName: cargo.iconAssetName,
+            });
+          }
+        });
+
+        console.log(
+          `✓ Loaded ${itemMap.size} items and ${cargoMap.size} cargos for lookup`,
+        );
+      }
+
+      // Process the API response structure
+      // The exact structure depends on the API response format
+      if (apiData.buildings || apiData.containers || apiData.inventories) {
+        const buildings =
+          apiData.buildings || apiData.containers || apiData.inventories || [];
+
+        console.log(
+          `Processing ${buildings.length} buildings/containers from API...`,
+        );
+
+        buildings.forEach((building, buildingIndex) => {
+          if (building.inventory && Array.isArray(building.inventory)) {
+            building.inventory.forEach((slot, slotIndex) => {
+              if (slot.contents || slot.item) {
+                const item = slot.contents || slot.item || slot;
+                const itemId = item.item_id || item.id;
+                const quantity = item.quantity || 1;
+                const itemType = item.item_type || item.type || 'item';
+
+                // Look up item details from our maps
+                let itemDetails;
+                if (itemType === 'cargo') {
+                  itemDetails = cargoMap.get(itemId);
+                } else {
+                  itemDetails = itemMap.get(itemId);
+                }
+
+                // Create unique location name
+                const baseName =
+                  building.buildingNickname ||
+                  building.nickname ||
+                  building.buildingName ||
+                  building.name ||
+                  'Unknown Container';
+                const buildingId =
+                  building.entityId || building.id || buildingIndex;
+                const location = baseName;
+
+                inventoryItems.push({
+                  id: `${building.entityId || building.id || buildingIndex}-${slotIndex}`,
+                  building_id:
+                    building.entityId || building.id || buildingIndex,
+                  building_name:
+                    building.buildingName ||
+                    building.name ||
+                    `Building ${buildingIndex}`,
+                  building_nickname:
+                    building.buildingNickname || building.nickname || null,
+                  building_type:
+                    building.buildingDescriptionId || building.type || 0,
+                  item_id: itemId,
+                  item_name: itemDetails
+                    ? itemDetails.name
+                    : item.name || item.item_name || `Unknown Item (${itemId})`,
+                  item_type: itemType,
+                  quantity: quantity,
+                  tier: itemDetails ? itemDetails.tier : item.tier || null,
+                  rarity: itemDetails
+                    ? itemDetails.rarity
+                    : item.rarity || item.rarityStr || 'Common',
+                  icon: itemDetails
+                    ? itemDetails.iconAssetName
+                    : item.icon || item.iconAssetName || null,
+                  location: location,
+                  slot_index: slotIndex,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            });
+          }
+        });
+      }
+
+      console.log(
+        `✓ Processed ${inventoryItems.length} inventory items from API`,
+      );
+      return inventoryItems;
+    } catch (error) {
+      console.error('Error processing API inventory data:', error);
+      throw error; // Re-throw to trigger fallback
+    }
+  }
+
+  async scrapeInventoryFromHTML() {
     try {
       const html = await this.fetchPageContent(this.settlementUrl);
       const settlementData = await this.parseDataFromScripts(html);
@@ -117,6 +299,13 @@ class BitjitaRealScraper {
                   itemDetails = itemMap.get(itemId);
                 }
 
+                // Create location name
+                const baseName =
+                  building.buildingNickname ||
+                  building.buildingName ||
+                  'Unknown Container';
+                const location = baseName;
+
                 inventoryItems.push({
                   id: `${building.entityId}-${slotIndex}`,
                   building_id: building.entityId,
@@ -134,10 +323,7 @@ class BitjitaRealScraper {
                   icon: itemDetails
                     ? itemDetails.iconAssetName
                     : building.iconAssetName,
-                  location:
-                    building.buildingNickname ||
-                    building.buildingName ||
-                    'Unknown Container',
+                  location: location,
                   slot_index: slotIndex,
                   timestamp: new Date().toISOString(),
                 });
@@ -152,7 +338,7 @@ class BitjitaRealScraper {
       );
       return inventoryItems;
     } catch (error) {
-      console.error('Error scraping inventory data:', error);
+      console.error('Error scraping inventory data from HTML:', error);
       return [];
     }
   }

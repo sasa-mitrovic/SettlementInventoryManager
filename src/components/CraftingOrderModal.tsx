@@ -1,4 +1,10 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   Modal,
   Stack,
@@ -13,7 +19,7 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
-import { useBitjitaItems, BitjitaItem } from '../services/bitjitaItemsCache';
+import { useUnifiedItems, UnifiedItem } from '../services/unifiedItemService';
 
 interface CraftingOrderModalProps {
   opened: boolean;
@@ -33,16 +39,46 @@ export function CraftingOrderModal({
   preselectedItem,
   meetTarget,
 }: CraftingOrderModalProps) {
+  console.log('[CraftingOrderModal] Component mounted, opened:', opened);
   const { userProfile } = useOptimizedUserWithProfile();
 
-  // Use the cached items service
+  // Use the unified items service
   const {
     items: allItems,
     loading: itemsLoading,
     isCacheValid,
-  } = useBitjitaItems();
+  } = useUnifiedItems();
 
-  const [filteredItems, setFilteredItems] = useState<BitjitaItem[]>([]);
+  console.log(
+    '[CraftingOrderModal] Unified items loaded:',
+    allItems.length,
+    'loading:',
+    itemsLoading,
+  );
+
+  // Log sample data for debugging
+  React.useEffect(() => {
+    if (allItems.length > 0) {
+      const itemTypes = allItems
+        .filter((item) => item.type === 'item')
+        .slice(0, 3);
+      const cargoTypes = allItems
+        .filter((item) => item.type === 'cargo')
+        .slice(0, 3);
+      console.log('[CraftingOrderModal] Sample items:', itemTypes);
+      console.log('[CraftingOrderModal] Sample cargos:', cargoTypes);
+
+      const leatherItems = allItems.filter((item) =>
+        item.name.toLowerCase().includes('leather'),
+      );
+      console.log(
+        `[CraftingOrderModal] Found ${leatherItems.length} leather items:`,
+        leatherItems.map((item) => ({ name: item.name, type: item.type })),
+      );
+    }
+  }, [allItems]);
+
+  const [filteredItems, setFilteredItems] = useState<UnifiedItem[]>([]);
   const [searchValue, setSearchValue] = useState('');
   const filterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -100,10 +136,10 @@ export function CraftingOrderModal({
       );
 
       if (matchingItem) {
-        form.setFieldValue('item_id', matchingItem.id);
+        form.setFieldValue('item_id', String(matchingItem.id));
       }
     }
-  }, [opened, preselectedItem, allItems]); // Added 'opened' to dependencies
+  }, [opened, preselectedItem, allItems]);
 
   // Handle search with debouncing and cancellation
   const handleSearchChange = useCallback(
@@ -121,13 +157,21 @@ export function CraftingOrderModal({
       // Debounce the filtering with a very short delay
       filterTimeoutRef.current = setTimeout(() => {
         if (!value.trim()) {
+          console.log(
+            '[CraftingOrderModal] No search value, showing first 50 items',
+          );
           setFilteredItems(allItems.slice(0, 50));
         } else {
           const searchLower = value.toLowerCase();
+          console.log(`[CraftingOrderModal] Searching for: "${searchLower}"`);
           const filtered = allItems.filter(
-            (item: BitjitaItem) =>
+            (item: UnifiedItem) =>
               item.name.toLowerCase().includes(searchLower) &&
               !item.name.endsWith('Output'),
+          );
+          console.log(
+            `[CraftingOrderModal] Found ${filtered.length} matching items:`,
+            filtered.slice(0, 5),
           );
           setFilteredItems(filtered);
         }
@@ -178,7 +222,7 @@ export function CraftingOrderModal({
       const { error } = await supabaseClient.from('crafting_orders').insert({
         item_id: parseInt(selectedItem.id), // Convert string back to number for database
         item_name: selectedItem.name,
-        item_icon: selectedItem.icon,
+        item_icon: selectedItem.iconAssetName,
         item_tier: selectedItem.tier,
         quantity: values.quantity,
         sector: values.sector,
@@ -227,12 +271,12 @@ export function CraftingOrderModal({
       }
     }
 
-    return selectItems.map((item: BitjitaItem) => ({
-      value: item.id,
+    return selectItems.map((item: UnifiedItem) => ({
+      value: String(item.id),
       label: `${item.name} (${item.tier || 'Unknown'})`,
       item: item, // Store full item for rendering
     }));
-  }, [filteredItems, allItems, form.values.item_id]); // Re-added form.values.item_id to ensure updates
+  }, [filteredItems, allItems, form.values.item_id]);
 
   // Handle "Meet Target" functionality
   const handleMeetTarget = () => {
@@ -261,11 +305,11 @@ export function CraftingOrderModal({
               </Text>
               {isCacheValid ? (
                 <Badge size="xs" color="green" variant="light">
-                  Items Cached
+                  Items & Cargos Cached
                 </Badge>
               ) : (
                 <Badge size="xs" color="gray" variant="light">
-                  Loading Items...
+                  Loading...
                 </Badge>
               )}
             </Group>
