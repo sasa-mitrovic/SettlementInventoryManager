@@ -68,21 +68,39 @@ export function Signup() {
       if (error) {
         setSignupError(error.message);
       } else if (data.user) {
-        // Update the user profile with in_game_name after signup
-        const { error: profileError } = await supabaseClient
-          .from('user_profiles')
-          .update({ in_game_name: values.inGameName })
-          .eq('id', data.user.id);
+        console.log('User signed up successfully:', data.user.id);
+        console.log('Metadata sent:', { in_game_name: values.inGameName });
 
-        if (profileError) {
-          console.error('Error updating profile:', profileError);
-          // Don't show this error to user as signup was successful
-        }
+        // Wait a moment and then ensure the profile has the in_game_name
+        // This is a fallback in case the trigger doesn't work
+        setTimeout(async () => {
+          try {
+            if (data.user?.id) {
+              const { data: profileData, error: profileError } =
+                await supabaseClient.rpc('complete_user_signup', {
+                  user_id: data.user.id,
+                  user_email: values.email,
+                  user_in_game_name: values.inGameName,
+                });
+
+              if (profileError) {
+                console.error('Error completing profile:', profileError);
+              } else if (profileData && !profileData.success) {
+                console.error('Profile completion failed:', profileData.error);
+              } else {
+                console.log('Profile completed successfully');
+              }
+            }
+          } catch (err) {
+            console.error('Error calling complete_user_signup:', err);
+          }
+        }, 1000); // Wait 1 second for the trigger to complete
 
         setSignupSuccess(true);
         form.reset();
       }
     } catch (err) {
+      console.error('Signup error:', err);
       setSignupError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);

@@ -81,13 +81,78 @@ export function Settings() {
         throw new Error('User not authenticated');
       }
 
-      // Use the admin function to bypass RLS issues
-      const { data: usersData, error: usersError } = await supabaseClient.rpc(
-        'get_all_users_for_admin',
-        { requesting_user_id: authUser.id },
-      );
+      console.log('Fetching users for:', authUser.id);
 
-      if (usersError) throw usersError;
+      // Try using the admin function first
+      try {
+        const { data: usersData, error: usersError } = await supabaseClient.rpc(
+          'get_all_users_for_admin',
+          { requesting_user_id: authUser.id },
+        );
+
+        if (usersError) {
+          console.log(
+            'Admin function failed, trying direct query:',
+            usersError,
+          );
+          throw usersError;
+        }
+
+        if (usersData) {
+          console.log('Got users from admin function:', usersData.length);
+          // Transform the data from the function
+          const transformedUsers = usersData.map((userData: any) => ({
+            id: userData.id,
+            email: userData.email,
+            first_name: userData.first_name,
+            last_name: userData.last_name,
+            in_game_name: userData.in_game_name,
+            is_active: userData.is_active,
+            created_at: userData.created_at,
+            role_id: userData.role_id,
+            role: userData.role_name
+              ? {
+                  id: userData.role_id,
+                  name: userData.role_name,
+                  description: userData.role_description,
+                }
+              : null,
+          }));
+
+          setUsers(transformedUsers);
+          return;
+        }
+      } catch (funcError) {
+        console.log(
+          'Function approach failed, trying direct query:',
+          funcError,
+        );
+      }
+
+      // Fallback to direct query
+      const { data: usersData, error: usersError } = await supabaseClient
+        .from('user_profiles')
+        .select(
+          `
+          id,
+          email,
+          first_name,
+          last_name,
+          in_game_name,
+          is_active,
+          created_at,
+          role_id,
+          role:roles(id, name, description)
+        `,
+        )
+        .order('created_at', { ascending: false });
+
+      if (usersError) {
+        console.error('Direct query failed:', usersError);
+        throw usersError;
+      }
+
+      console.log('Got users from direct query:', usersData?.length || 0);
 
       // Transform the data to match our interface
       const transformedUsers = (usersData || []).map((userData: any) => ({
@@ -99,17 +164,18 @@ export function Settings() {
         is_active: userData.is_active,
         created_at: userData.created_at,
         role_id: userData.role_id,
-        role: userData.role_name
+        role: userData.role
           ? {
-              id: userData.role_id,
-              name: userData.role_name,
-              description: userData.role_description,
+              id: userData.role.id,
+              name: userData.role.name,
+              description: userData.role.description,
             }
           : null,
       }));
 
       setUsers(transformedUsers);
     } catch (err) {
+      console.error('Failed to fetch users:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch users');
     }
   };
@@ -139,17 +205,58 @@ export function Settings() {
 
     setUpdatingUserId(userId);
     try {
-      const { error } = await supabaseClient
-        .from('user_profiles')
-        .update({ role_id: roleId })
-        .eq('id', userId);
+      console.log('Updating user role:', { userId, roleId });
 
-      if (error) throw error;
+      // Try using the database function first (more reliable)
+      const { data, error: rpcError } = await supabaseClient.rpc(
+        'update_user_role',
+        {
+          target_user_id: userId,
+          new_role_id: roleId,
+        },
+      );
+
+      if (rpcError) {
+        console.log('RPC method failed, trying direct update:', rpcError);
+
+        // Fallback to direct update
+        const { error: directError } = await supabaseClient
+          .from('user_profiles')
+          .update({ role_id: roleId || null })
+          .eq('id', userId);
+
+        if (directError) {
+          console.error('Direct update error:', directError);
+          throw directError;
+        }
+      } else {
+        // Check the response from our database function
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to update user role');
+        }
+      }
+
+      console.log('User role updated successfully');
+
+      // Show success notification
+      notifications.show({
+        title: 'Role Updated',
+        message: 'User role has been updated successfully.',
+        color: 'green',
+      });
 
       // Refresh users data to show the updated role
       await fetchUsers();
     } catch (err) {
       console.error('Failed to update user role:', err);
+
+      notifications.show({
+        title: 'Update Failed',
+        message:
+          err instanceof Error ? err.message : 'Failed to update user role',
+        color: 'red',
+      });
+
       setError(
         err instanceof Error ? err.message : 'Failed to update user role',
       );
@@ -480,11 +587,17 @@ export function Settings() {
                         <Group gap="xs">
                           <PermissionGate permission="users.manage_roles">
                             <Select
+                              key={`${user.id}-${user.role?.id || 'no-role'}`}
                               placeholder="Select role"
                               value={user.role?.id || ''}
-                              onChange={(value) =>
-                                updateUserRole(user.id, value)
-                              }
+                              onChange={(value) => {
+                                console.log('Role change:', {
+                                  userId: user.id,
+                                  newRoleId: value,
+                                  currentRoleId: user.role?.id,
+                                });
+                                updateUserRole(user.id, value);
+                              }}
                               data={[
                                 { value: '', label: 'No Role' },
                                 ...roles.map((role) => ({
@@ -495,6 +608,7 @@ export function Settings() {
                               size="sm"
                               w={150}
                               disabled={updatingUserId === user.id}
+                              clearable={false}
                             />
                           </PermissionGate>
 
