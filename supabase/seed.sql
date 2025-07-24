@@ -180,13 +180,17 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
     default_role_id UUID;
+    user_in_game_name TEXT;
 BEGIN
-    -- Get the default role (viewer)
-    SELECT id INTO default_role_id FROM public.roles WHERE name = 'viewer' LIMIT 1;
+    -- Get the default role (employee)
+    SELECT id INTO default_role_id FROM public.roles WHERE name = 'employee' LIMIT 1;
     
-    -- Insert user profile
-    INSERT INTO public.user_profiles (id, email, role_id)
-    VALUES (NEW.id, NEW.email, default_role_id);
+    -- Extract in_game_name from auth metadata
+    user_in_game_name := NEW.raw_user_meta_data->>'in_game_name';
+    
+    -- Insert user profile with in_game_name
+    INSERT INTO public.user_profiles (id, email, role_id, in_game_name)
+    VALUES (NEW.id, NEW.email, default_role_id, user_in_game_name);
     
     RETURN NEW;
 END;
