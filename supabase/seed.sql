@@ -300,6 +300,23 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Create function to get public user display names (for crafting orders, etc.)
+-- This function is SECURITY DEFINER to bypass RLS for public display names only
+CREATE OR REPLACE FUNCTION public.get_public_user_names(user_ids UUID[])
+RETURNS TABLE (
+    user_id UUID,
+    display_name TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        up.id as user_id,
+        COALESCE(up.in_game_name, up.email, 'Unknown User') as display_name
+    FROM public.user_profiles up
+    WHERE up.id = ANY(user_ids);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Add updated_at triggers (drop and recreate to avoid conflicts)
 DROP TRIGGER IF EXISTS set_roles_updated_at ON public.roles;
 CREATE TRIGGER set_roles_updated_at

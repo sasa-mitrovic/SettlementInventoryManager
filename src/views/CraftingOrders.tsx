@@ -167,22 +167,35 @@ export function CraftingOrders() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabaseClient
-        .from('crafting_orders')
-        .select(
-          `
-          *,
-          placed_by_profile:user_profiles!placed_by(in_game_name, email),
-          claimed_by_profile:user_profiles!claimed_by(in_game_name, email),
-          completed_by_profile:user_profiles!completed_by(in_game_name, email)
-        `,
-        )
-        .order('created_at', { ascending: false });
+      // Use the new database function that includes user names and bypasses RLS
+      const { data: ordersData, error: ordersError } = await supabaseClient
+        .rpc('get_crafting_orders_with_names');
 
-      if (error) throw error;
+      if (ordersError) {
+        console.error('Error fetching crafting orders:', ordersError);
+        throw ordersError;
+      }
+
+      // Transform the data to match our interface
+      const transformedOrders = ordersData?.map((order: any) => ({
+        ...order,
+        // Create profile objects for compatibility with existing formatUserName function
+        placed_by_profile: order.placed_by_name ? {
+          in_game_name: order.placed_by_name,
+          email: order.placed_by_name
+        } : null,
+        claimed_by_profile: order.claimed_by_name ? {
+          in_game_name: order.claimed_by_name,
+          email: order.claimed_by_name
+        } : null,
+        completed_by_profile: order.completed_by_name ? {
+          in_game_name: order.completed_by_name,
+          email: order.completed_by_name
+        } : null,
+      })) || [];
 
       // Sort orders with unassigned first, then assigned, then completed
-      const sortedOrders = (data || []).sort((a, b) => {
+      const sortedOrders = transformedOrders.sort((a: CraftingOrder, b: CraftingOrder) => {
         const statusOrder = { unassigned: 0, assigned: 1, completed: 2 };
         const aOrder = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
         const bOrder = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
