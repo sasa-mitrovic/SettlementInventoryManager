@@ -32,6 +32,7 @@ import {
 import { Link } from 'react-router-dom';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
+import { useBitjitaItems, BitjitaItem } from '../services/bitjitaItemsCache';
 
 interface CraftingOrder {
   id: string;
@@ -61,13 +62,6 @@ interface CraftingOrder {
   };
 }
 
-interface BitjitaItem {
-  id: string;
-  name: string;
-  icon: string;
-  tier: string;
-}
-
 export function CraftingOrders() {
   const [orders, setOrders] = useState<CraftingOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,12 +73,27 @@ export function CraftingOrders() {
   // Modal states
   const [modalOpened, { open: openModal, close: closeModal }] =
     useDisclosure(false);
-  const [items, setItems] = useState<BitjitaItem[]>([]);
-  const [allItems, setAllItems] = useState<BitjitaItem[]>([]); // Store all items for local filtering
-  const [itemsLoading, setItemsLoading] = useState(false);
-  const [itemsLoaded, setItemsLoaded] = useState(false); // Track if items have been loaded
+
+  // Use the cached items service
+  const {
+    items: allItems,
+    loading: itemsLoading,
+    error: itemsError,
+    refreshItems,
+    cacheAge,
+    isCacheValid,
+  } = useBitjitaItems();
+
+  const [filteredItems, setFilteredItems] = useState<BitjitaItem[]>([]);
   const [searchValue, setSearchValue] = useState('');
   const filterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Initialize filtered items when allItems changes
+  useEffect(() => {
+    if (allItems && allItems.length > 0) {
+      setFilteredItems(allItems.slice(0, 50));
+    }
+  }, [allItems]);
 
   // Handle search with debouncing and cancellation
   const handleSearchChange = useCallback(
@@ -96,13 +105,13 @@ export function CraftingOrders() {
         clearTimeout(filterTimeoutRef.current);
       }
 
-      // Only proceed if items are loaded
-      if (!itemsLoaded || itemsLoading) return;
+      // Only proceed if items are available
+      if (!allItems || allItems.length === 0 || itemsLoading) return;
 
       // Debounce the filtering with a very short delay
       filterTimeoutRef.current = setTimeout(() => {
         if (!value.trim()) {
-          setItems(allItems.slice(0, 50));
+          setFilteredItems(allItems.slice(0, 50));
         } else {
           const searchLower = value.toLowerCase();
           const filtered = allItems.filter(
@@ -110,11 +119,11 @@ export function CraftingOrders() {
               item.name.toLowerCase().includes(searchLower) &&
               !item.name.endsWith('Output'),
           );
-          setItems(filtered);
+          setFilteredItems(filtered);
         }
       }, 50); // Very short 50ms debounce
     },
-    [allItems, itemsLoaded, itemsLoading],
+    [allItems, itemsLoading],
   );
 
   // Handle modal close
@@ -155,80 +164,6 @@ export function CraftingOrders() {
       sector: (value) => (!value ? 'Please select a sector' : null),
     },
   });
-
-  const fetchItems = async () => {
-    try {
-      setItemsLoading(true);
-
-      // Use Supabase database function to fetch from Bitjita API (avoids CORS)
-      const { data, error } = await supabaseClient.rpc('fetch_bitjita_items');
-
-      if (error) {
-        throw new Error(
-          error.message || 'Failed to call fetch_bitjita_items function',
-        );
-      }
-
-      // Check if the function returned an error
-      if (data?.error) {
-        throw new Error(data.message || 'API function returned an error');
-      }
-
-      console.log('API Response:', data); // Debug log
-
-      // Handle different response structures
-      let itemsArray = data;
-
-      // If data has a 'data' or 'items' property, use that
-      if (data?.data && Array.isArray(data.data)) {
-        itemsArray = data.data;
-      } else if (data?.items && Array.isArray(data.items)) {
-        itemsArray = data.items;
-      }
-
-      // Ensure we have an array
-      if (!Array.isArray(itemsArray)) {
-        console.error('Unexpected API response structure:', data);
-        throw new Error(
-          `API response is not an array. Got: ${typeof itemsArray}. Structure: ${JSON.stringify(data).substring(0, 200)}...`,
-        );
-      }
-
-      // Convert the items to have string IDs for Mantine Select compatibility
-      const itemsWithStringIds = itemsArray.map((item: any) => ({
-        ...item,
-        id: item.id?.toString() || item.item_id?.toString() || 'unknown',
-      }));
-
-      // Filter out items that end with "Output"
-      const filteredItems = itemsWithStringIds.filter(
-        (item: any) => !item.name?.endsWith('Output'),
-      );
-
-      // Store all items for local filtering
-      setAllItems(filteredItems);
-
-      // Initially show first 50 items
-      setItems(filteredItems.slice(0, 50));
-
-      // Mark items as loaded
-      setItemsLoaded(true);
-    } catch (err) {
-      console.error('Failed to fetch items from API:', err);
-      notifications.show({
-        title: 'Error',
-        message: `Failed to load items from API: ${err instanceof Error ? err.message : 'Unknown error'}`,
-        color: 'red',
-      });
-
-      // Set empty array on error so the UI doesn't break
-      setItems([]);
-      setAllItems([]);
-      setItemsLoaded(false);
-    } finally {
-      setItemsLoading(false);
-    }
-  };
 
   const fetchOrders = async () => {
     try {
@@ -561,34 +496,41 @@ export function CraftingOrders() {
   );
 
   const itemSelectData = useMemo(() => {
-    let selectItems = items;
+    let selectItems = filteredItems;
 
     // If we have a selected item that's not in the current items list, add it
     const selectedItemId = form.values.item_id;
-    if (selectedItemId && !items.find((item) => item.id === selectedItemId)) {
+    if (
+      selectedItemId &&
+      !filteredItems.find((item) => item.id === selectedItemId)
+    ) {
       const selectedItem = allItems.find((item) => item.id === selectedItemId);
       if (selectedItem) {
-        selectItems = [selectedItem, ...items];
+        selectItems = [selectedItem, ...filteredItems];
       }
     }
 
-    return selectItems.map((item) => ({
+    return selectItems.map((item: BitjitaItem) => ({
       value: item.id,
-      label: `${item.name} (${item.tier})`,
+      label: `${item.name} (${item.tier || 'Unknown'})`,
       item: item, // Store full item for rendering
     }));
-  }, [items, allItems, form.values.item_id]);
+  }, [filteredItems, allItems, form.values.item_id]);
 
   useEffect(() => {
     fetchOrders();
   }, []);
 
+  // Display any item loading errors
   useEffect(() => {
-    if (modalOpened && !itemsLoaded) {
-      // Only fetch items once when modal opens and items haven't been loaded
-      fetchItems();
+    if (itemsError) {
+      notifications.show({
+        title: 'Error Loading Items',
+        message: itemsError,
+        color: 'red',
+      });
     }
-  }, [modalOpened, itemsLoaded]);
+  }, [itemsError]);
 
   if (loading) {
     return (
@@ -775,32 +717,47 @@ export function CraftingOrders() {
       >
         <form onSubmit={form.onSubmit(submitOrder)}>
           <Stack gap="md">
-            <Select
-              label="Select Item"
-              placeholder="Choose an item to craft"
-              data={itemSelectData}
-              searchable
-              searchValue={searchValue}
-              onSearchChange={handleSearchChange}
-              disabled={itemsLoading}
-              nothingFoundMessage={
-                itemsLoading ? 'Loading...' : 'No items found'
-              }
-              renderOption={({ option }) => {
-                const item = (option as any).item;
-                return (
-                  <Group gap="xs">
-                    <div>
-                      <Text>{item?.name || 'Unknown Item'}</Text>
-                      <Text size="xs" c="dimmed">
-                        T{item?.tier || 'Unknown'}
-                      </Text>
-                    </div>
-                  </Group>
-                );
-              }}
-              {...form.getInputProps('item_id')}
-            />
+            <div>
+              <Group justify="space-between" mb="xs">
+                <Text fw={500} size="sm">
+                  Select Item
+                </Text>
+                {isCacheValid ? (
+                  <Badge size="xs" color="green" variant="light">
+                    Items Cached
+                  </Badge>
+                ) : (
+                  <Badge size="xs" color="gray" variant="light">
+                    Loading Items...
+                  </Badge>
+                )}
+              </Group>
+              <Select
+                placeholder="Choose an item to craft"
+                data={itemSelectData}
+                searchable
+                searchValue={searchValue}
+                onSearchChange={handleSearchChange}
+                disabled={itemsLoading}
+                nothingFoundMessage={
+                  itemsLoading ? 'Loading...' : 'No items found'
+                }
+                renderOption={({ option }) => {
+                  const item = (option as any).item;
+                  return (
+                    <Group gap="xs">
+                      <div>
+                        <Text>{item?.name || 'Unknown Item'}</Text>
+                        <Text size="xs" c="dimmed">
+                          T{item?.tier || 'Unknown'}
+                        </Text>
+                      </div>
+                    </Group>
+                  );
+                }}
+                {...form.getInputProps('item_id')}
+              />
+            </div>
 
             <Select
               label="Sector"

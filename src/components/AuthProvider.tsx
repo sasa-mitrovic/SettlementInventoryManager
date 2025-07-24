@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, createContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { Loader, Center, Stack, Text } from '@mantine/core';
+import { bitjitaItemsCache } from '../services/bitjitaItemsCache';
 
 interface AuthContextType {
   user: User | null;
@@ -120,6 +121,16 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
       subscription.unsubscribe();
     };
   }, [initialized]);
+
+  // Preload Bitjita items cache after authentication is initialized
+  useEffect(() => {
+    if (initialized && user) {
+      // Only preload for authenticated users
+      bitjitaItemsCache.preload().catch((error) => {
+        console.warn('Failed to preload Bitjita items cache:', error);
+      });
+    }
+  }, [initialized, user]);
 
   // Show loading state while checking for existing session
   if (loading && !initialized) {
