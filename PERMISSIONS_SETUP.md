@@ -116,7 +116,6 @@ async function handleAction() {
   }
 
   const allPermissions = await getCurrentUserPermissions();
-  console.log('User permissions:', allPermissions);
 }
 ```
 

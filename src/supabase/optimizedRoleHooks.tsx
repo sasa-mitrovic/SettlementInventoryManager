@@ -62,13 +62,6 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
       const effectiveUserId =
         isImpersonating && targetUserId ? targetUserId : user.id;
 
-      console.log('PermissionProvider fetchAllUserData:', {
-        authUserId: user.id,
-        isImpersonating,
-        targetUserId,
-        effectiveUserId,
-      });
-
       // Use a service role call to bypass RLS issues temporarily
       // Fetch permissions first (this should work)
       const permissionsResult = await supabaseClient.rpc(
@@ -226,13 +219,11 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
   // Listen for impersonation changes
   useEffect(() => {
     const handleStorageChange = () => {
-      console.log('Storage change detected, refetching user data');
       // Force refetch when impersonation status changes
       fetchAllUserData();
     };
 
-    const handleImpersonationChange = (event: any) => {
-      console.log('Impersonation change event detected:', event.detail);
+    const handleImpersonationChange = (_event: any) => {
       // Force refetch when impersonation changes (custom event for same window)
       fetchAllUserData();
     };
@@ -254,18 +245,9 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
   const hasPermission = useCallback(
     (permissionName: string): boolean => {
       if (!cachedData?.permissions) {
-        console.log('No cached permissions data');
         return false;
       }
       const hasIt = permissionName in cachedData.permissions;
-      const userId = cachedData?.user?.id;
-      console.log(
-        `Permission check for "${permissionName}": ${hasIt} (user: ${userId})`,
-      );
-      console.log(
-        'Available permissions:',
-        Object.keys(cachedData.permissions),
-      );
       return hasIt;
     },
     [cachedData],

@@ -30,16 +30,6 @@ export const AppLayout = () => {
   const { hasPermission: hasSettingsAccess, loading: permissionLoading } =
     useHasPermission('settings.read');
 
-  // Debug logging
-  console.log('AppLayout - Settings access check:', {
-    hasSettingsAccess,
-    permissionLoading,
-    userRole: userProfile?.role?.name,
-    userId: userProfile?.id,
-    isImpersonating: localStorage.getItem('impersonation_active') === 'true',
-    targetUserId: localStorage.getItem('impersonation_target_user'),
-  });
-
   const handleSignOut = async () => {
     try {
       // Clear any impersonation state first
@@ -63,9 +53,6 @@ export const AppLayout = () => {
           error.message?.toLowerCase().includes('invalid');
 
         if (isSessionMissing) {
-          console.log(
-            'Session already missing/invalid - treating as successful signout',
-          );
           // Treat as successful since user is already effectively signed out
         } else {
           // Show error for other types of failures

@@ -6,8 +6,6 @@ import { notifications } from '@mantine/notifications';
 
 export const robustSignOut = async (navigate: (path: string) => void) => {
   try {
-    console.log('Starting robust sign out process...');
-
     // Step 1: Clear all local storage data first (this always works)
     const keysToRemove = [
       'impersonation_active',
@@ -48,7 +46,6 @@ export const robustSignOut = async (navigate: (path: string) => void) => {
           error.message?.toLowerCase().includes('expired');
 
         if (isBenignError) {
-          console.log('Session was already invalid - this is fine');
           supabaseSignOutSuccessful = true;
         } else {
           console.error('Real Supabase sign out error:', error);

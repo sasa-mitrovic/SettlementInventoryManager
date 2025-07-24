@@ -68,9 +68,6 @@ export function Signup() {
       if (error) {
         setSignupError(error.message);
       } else if (data.user) {
-        console.log('User signed up successfully:', data.user.id);
-        console.log('Metadata sent:', { in_game_name: values.inGameName });
-
         // Wait a moment and then ensure the profile has the in_game_name
         // This is a fallback in case the trigger doesn't work
         setTimeout(async () => {
@@ -87,8 +84,6 @@ export function Signup() {
                 console.error('Error completing profile:', profileError);
               } else if (profileData && !profileData.success) {
                 console.error('Profile completion failed:', profileData.error);
-              } else {
-                console.log('Profile completed successfully');
               }
             }
           } catch (err) {

@@ -82,8 +82,6 @@ export function Settings() {
         throw new Error('User not authenticated');
       }
 
-      console.log('Fetching users for:', authUser.id);
-
       // Try using the admin function first
       try {
         const { data: usersData, error: usersError } = await supabaseClient.rpc(
@@ -92,15 +90,10 @@ export function Settings() {
         );
 
         if (usersError) {
-          console.log(
-            'Admin function failed, trying direct query:',
-            usersError,
-          );
           throw usersError;
         }
 
         if (usersData) {
-          console.log('Got users from admin function:', usersData.length);
           // Transform the data from the function
           const transformedUsers = usersData.map((userData: any) => ({
             id: userData.id,
@@ -123,12 +116,7 @@ export function Settings() {
           setUsers(transformedUsers);
           return;
         }
-      } catch (funcError) {
-        console.log(
-          'Function approach failed, trying direct query:',
-          funcError,
-        );
-      }
+      } catch (funcError) {}
 
       // Fallback to direct query
       const { data: usersData, error: usersError } = await supabaseClient
@@ -152,8 +140,6 @@ export function Settings() {
         console.error('Direct query failed:', usersError);
         throw usersError;
       }
-
-      console.log('Got users from direct query:', usersData?.length || 0);
 
       // Transform the data to match our interface
       const transformedUsers = (usersData || []).map((userData: any) => ({
@@ -206,8 +192,6 @@ export function Settings() {
 
     setUpdatingUserId(userId);
     try {
-      console.log('Updating user role:', { userId, roleId });
-
       // Try using the database function first (more reliable)
       const { data, error: rpcError } = await supabaseClient.rpc(
         'update_user_role',
@@ -218,8 +202,6 @@ export function Settings() {
       );
 
       if (rpcError) {
-        console.log('RPC method failed, trying direct update:', rpcError);
-
         // Fallback to direct update
         const { error: directError } = await supabaseClient
           .from('user_profiles')
@@ -236,8 +218,6 @@ export function Settings() {
           throw new Error(data.error || 'Failed to update user role');
         }
       }
-
-      console.log('User role updated successfully');
 
       // Show success notification
       notifications.show({
@@ -592,11 +572,6 @@ export function Settings() {
                               placeholder="Select role"
                               value={user.role?.id || ''}
                               onChange={(value) => {
-                                console.log('Role change:', {
-                                  userId: user.id,
-                                  newRoleId: value,
-                                  currentRoleId: user.role?.id,
-                                });
                                 updateUserRole(user.id, value);
                               }}
                               data={[

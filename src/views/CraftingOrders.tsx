@@ -200,7 +200,6 @@ export function CraftingOrders() {
 
       setOrders(sortedOrders);
     } catch (err) {
-      console.error('Failed to fetch orders:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch orders');
     } finally {
       setLoading(false);
@@ -231,7 +230,6 @@ export function CraftingOrders() {
 
       await fetchOrders();
     } catch (err) {
-      console.error('Failed to claim order:', err);
       notifications.show({
         title: 'Claim Failed',
         message: err instanceof Error ? err.message : 'Failed to claim order',
@@ -267,7 +265,6 @@ export function CraftingOrders() {
 
       await fetchOrders();
     } catch (err) {
-      console.error('Failed to complete order:', err);
       notifications.show({
         title: 'Complete Failed',
         message:
@@ -299,8 +296,6 @@ export function CraftingOrders() {
 
   const cancelOrder = async (orderId: string) => {
     try {
-      console.log('Attempting to cancel order:', orderId);
-
       // Use the database function to handle cancellation with proper permissions
       const { data, error } = await supabaseClient.rpc(
         'cancel_crafting_order',
@@ -309,10 +304,7 @@ export function CraftingOrders() {
         },
       );
 
-      console.log('Cancel result:', { data, error });
-
       if (error) {
-        console.error('Database error:', error);
         throw error;
       }
 
@@ -329,7 +321,6 @@ export function CraftingOrders() {
 
       await fetchOrders();
     } catch (err) {
-      console.error('Failed to cancel order:', err);
       notifications.show({
         title: 'Cancel Failed',
         message: err instanceof Error ? err.message : 'Failed to cancel order',
@@ -378,7 +369,6 @@ export function CraftingOrders() {
 
       await fetchOrders();
     } catch (err) {
-      console.error('Failed to unclaim order:', err);
       notifications.show({
         title: 'Unclaim Failed',
         message: err instanceof Error ? err.message : 'Failed to unclaim order',
@@ -412,7 +402,6 @@ export function CraftingOrders() {
     // Look for the selected item in allItems instead of just items
     const selectedItem = allItems.find((item) => item.id === values.item_id);
     if (!selectedItem) {
-      console.error('Selected item not found:', values.item_id);
       notifications.show({
         title: 'Error',
         message:
@@ -446,7 +435,6 @@ export function CraftingOrders() {
       handleCloseModal();
       await fetchOrders();
     } catch (err) {
-      console.error('Failed to create order:', err);
       notifications.show({
         title: 'Create Failed',
         message: err instanceof Error ? err.message : 'Failed to create order',

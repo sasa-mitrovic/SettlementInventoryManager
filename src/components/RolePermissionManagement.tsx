@@ -100,7 +100,6 @@ function PermissionModal({
       onSuccess();
       onClose();
     } catch (err) {
-      console.error('Failed to save permission:', err);
       notifications.show({
         title: 'Save Failed',
         message:
@@ -200,7 +199,6 @@ function RoleModal({ role, onClose, onSuccess }: RoleModalProps) {
         setSelectedPermissions(rolePerms?.map((rp) => rp.permission_id) || []);
       }
     } catch (err) {
-      console.error('Failed to fetch permissions:', err);
       notifications.show({
         title: 'Load Failed',
         message: 'Failed to load permissions',
@@ -266,7 +264,6 @@ function RoleModal({ role, onClose, onSuccess }: RoleModalProps) {
       onSuccess();
       onClose();
     } catch (err) {
-      console.error('Failed to save role:', err);
       notifications.show({
         title: 'Save Failed',
         message: err instanceof Error ? err.message : 'Failed to save role',
@@ -488,7 +485,6 @@ export function RolePermissionManagement() {
 
       setRoles(rolesWithPermissions);
     } catch (err) {
-      console.error('Failed to fetch data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
     } finally {
       setLoading(false);
@@ -512,7 +508,6 @@ export function RolePermissionManagement() {
 
       await fetchData();
     } catch (err) {
-      console.error('Failed to delete permission:', err);
       notifications.show({
         title: 'Delete Failed',
         message:
@@ -539,7 +534,6 @@ export function RolePermissionManagement() {
 
       await fetchData();
     } catch (err) {
-      console.error('Failed to delete role:', err);
       notifications.show({
         title: 'Delete Failed',
         message: err instanceof Error ? err.message : 'Failed to delete role',

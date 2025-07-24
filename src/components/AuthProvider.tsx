@@ -67,7 +67,7 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
         } = await supabaseClient.auth.getSession();
 
         if (error) {
-          console.error('Error getting session:', error);
+          // Silent error handling for production
         }
 
         if (mounted) {
@@ -80,7 +80,6 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
           setInitialized(true);
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
         if (mounted) {
           setLoading(false);
           setInitialized(true);
@@ -94,8 +93,6 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
     const {
       data: { subscription },
     } = supabaseClient.auth.onAuthStateChange(async (event, newSession) => {
-      console.log('Auth state changed:', event, newSession?.user?.email);
-
       if (mounted) {
         setSession(newSession);
         const processedUser = checkImpersonation(newSession?.user ?? null);
@@ -126,8 +123,8 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
   useEffect(() => {
     if (initialized && user) {
       // Only preload for authenticated users
-      bitjitaItemsCache.preload().catch((error) => {
-        console.warn('Failed to preload Bitjita items cache:', error);
+      bitjitaItemsCache.preload().catch(() => {
+        // Silent error handling for production
       });
     }
   }, [initialized, user]);

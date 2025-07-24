@@ -53,7 +53,6 @@ export function ImpersonationBanner() {
       // Reload to refresh contexts
       window.location.reload();
     } catch (error) {
-      console.error('Error stopping impersonation:', error);
       notifications.show({
         title: 'Error',
         message: 'Failed to stop impersonation',
