@@ -18,6 +18,7 @@ import {
   TextInput,
   UnstyledButton,
   useComputedColorScheme,
+  Tooltip,
 } from '@mantine/core';
 import {
   IconPackage,
@@ -68,6 +69,15 @@ interface CombinedInventoryItem {
   icon: string | null; // Updated from icon_url to icon
   target_quantity?: number;
   target_id?: string;
+  package_breakdown?: {
+    base_quantity: number;
+    package_items: Array<{
+      name: string;
+      quantity: number;
+      multiplier: number;
+      contribution: number;
+    }>;
+  };
 }
 
 type SortField =
@@ -328,29 +338,128 @@ export function Inventory() {
     }
   };
 
+  // Package calculation utilities
+  const getPackageInfo = (itemName: string) => {
+    // Define package patterns and their multipliers
+    // Order matters - more specific patterns first
+    const packagePatterns = [{ suffix: ' Package', multiplier: 100 }];
+
+    for (const pattern of packagePatterns) {
+      if (itemName.endsWith(pattern.suffix)) {
+        const baseItemName = itemName.slice(0, -pattern.suffix.length);
+        return {
+          isPackage: true,
+          baseItemName,
+          multiplier: pattern.multiplier,
+        };
+      }
+    }
+
+    return {
+      isPackage: false,
+      baseItemName: itemName,
+      multiplier: 1,
+    };
+  };
+
   const getCombinedInventory = (): CombinedInventoryItem[] => {
     const combined: { [key: string]: CombinedInventoryItem } = {};
+    let packageDetectionCount = 0; // Debug counter
 
+    // First pass: process all items and handle packages
     inventory.forEach((item) => {
-      const key = item.item_name;
+      const packageInfo = getPackageInfo(item.item_name);
+      const key = packageInfo.baseItemName; // Use base item name as key
+      const effectiveQuantity = item.quantity * packageInfo.multiplier;
+
+      if (packageInfo.isPackage) {
+        packageDetectionCount++;
+        console.log(
+          `📦 Package detected: "${item.item_name}" -> "${packageInfo.baseItemName}" (${item.quantity} × ${packageInfo.multiplier} = ${effectiveQuantity})`,
+        );
+      }
+
       if (combined[key]) {
-        combined[key].total_quantity += item.quantity;
+        combined[key].total_quantity += effectiveQuantity;
+
+        // Update package breakdown
+        if (!combined[key].package_breakdown) {
+          combined[key].package_breakdown = {
+            base_quantity: 0,
+            package_items: [],
+          };
+        }
+
+        if (packageInfo.isPackage) {
+          // Add to package items
+          const existingPackage = combined[
+            key
+          ].package_breakdown!.package_items.find(
+            (p) => p.name === item.item_name,
+          );
+          if (existingPackage) {
+            existingPackage.quantity += item.quantity;
+            existingPackage.contribution += effectiveQuantity;
+          } else {
+            combined[key].package_breakdown!.package_items.push({
+              name: item.item_name,
+              quantity: item.quantity,
+              multiplier: packageInfo.multiplier,
+              contribution: effectiveQuantity,
+            });
+          }
+        } else {
+          // Add to base quantity
+          combined[key].package_breakdown!.base_quantity += item.quantity;
+        }
       } else {
-        combined[key] = {
-          item_name: item.item_name,
+        // Initialize new combined item
+        const newItem: CombinedInventoryItem = {
+          item_name: packageInfo.baseItemName, // Use base item name
           tier: item.tier,
           rarity: item.rarity,
-          total_quantity: item.quantity,
+          total_quantity: effectiveQuantity,
           icon: item.icon,
         };
+
+        // Initialize package breakdown
+        if (packageInfo.isPackage) {
+          newItem.package_breakdown = {
+            base_quantity: 0,
+            package_items: [
+              {
+                name: item.item_name,
+                quantity: item.quantity,
+                multiplier: packageInfo.multiplier,
+                contribution: effectiveQuantity,
+              },
+            ],
+          };
+        } else {
+          newItem.package_breakdown = {
+            base_quantity: item.quantity,
+            package_items: [],
+          };
+        }
+
+        combined[key] = newItem;
       }
     });
 
+    if (packageDetectionCount > 0) {
+      console.log(
+        `🎯 Package system processed ${packageDetectionCount} packaged items`,
+      );
+    }
+
     // Add target information
     targets.forEach((target) => {
-      if (combined[target.item_name]) {
-        combined[target.item_name].target_quantity = target.target_quantity;
-        combined[target.item_name].target_id = target.id;
+      const targetPackageInfo = getPackageInfo(target.item_name);
+      const targetKey = targetPackageInfo.baseItemName;
+
+      if (combined[targetKey]) {
+        combined[targetKey].target_quantity = target.target_quantity;
+        combined[targetKey].target_id = target.id;
       }
     });
 
@@ -617,9 +726,56 @@ export function Inventory() {
                               : undefined,
                         }}
                       >
-                        <Text fw={600}>
-                          {item.total_quantity.toLocaleString()}
-                        </Text>
+                        {item.package_breakdown &&
+                        (item.package_breakdown.package_items.length > 0 ||
+                          item.package_breakdown.base_quantity > 0) ? (
+                          <Tooltip
+                            label={
+                              <Stack gap="xs">
+                                <Text size="sm" fw={600}>
+                                  Breakdown:
+                                </Text>
+                                {item.package_breakdown.base_quantity > 0 && (
+                                  <Text size="xs">
+                                    Base:{' '}
+                                    {item.package_breakdown.base_quantity.toLocaleString()}
+                                  </Text>
+                                )}
+                                {item.package_breakdown.package_items.map(
+                                  (pkg, index) => (
+                                    <Text key={index} size="xs">
+                                      {pkg.name}:{' '}
+                                      {pkg.quantity.toLocaleString()} ×{' '}
+                                      {pkg.multiplier} ={' '}
+                                      {pkg.contribution.toLocaleString()}
+                                    </Text>
+                                  ),
+                                )}
+                                <Text size="xs" fw={600} c="blue">
+                                  Total: {item.total_quantity.toLocaleString()}
+                                </Text>
+                              </Stack>
+                            }
+                            multiline
+                            w={300}
+                          >
+                            <Group gap="xs">
+                              <Text fw={600}>
+                                {item.total_quantity.toLocaleString()}
+                              </Text>
+                              {item.package_breakdown.package_items.length >
+                                0 && (
+                                <Badge size="xs" color="blue" variant="light">
+                                  📦
+                                </Badge>
+                              )}
+                            </Group>
+                          </Tooltip>
+                        ) : (
+                          <Text fw={600}>
+                            {item.total_quantity.toLocaleString()}
+                          </Text>
+                        )}
                       </Table.Td>
                       <Table.Td
                         style={{
