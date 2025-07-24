@@ -32,6 +32,7 @@ import { useOptimizedUserWithProfile } from '../supabase/loader';
 import { useAuth } from '../components/AuthProvider';
 import { PermissionGate } from '../components/PermissionGate';
 import { RolePermissionManagement } from '../components/RolePermissionManagement';
+import { CacheManager } from '../components/CacheManager';
 import { usePermissionContext } from '../supabase/optimizedRoleHooks';
 
 interface UserProfile {
@@ -672,6 +673,9 @@ export function Settings() {
           {userProfile?.role?.name?.toLowerCase() === 'super_admin' && (
             <RolePermissionManagement />
           )}
+
+          {/* Cache Management */}
+          <CacheManager />
         </Stack>
       </Container>
     </PermissionGate>
