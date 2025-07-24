@@ -14,7 +14,6 @@ import {
   Badge,
   Switch,
   Modal,
-  TextInput,
   NumberInput,
   Select,
   Avatar,
