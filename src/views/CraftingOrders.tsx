@@ -79,8 +79,6 @@ export function CraftingOrders() {
     items: allItems,
     loading: itemsLoading,
     error: itemsError,
-    refreshItems,
-    cacheAge,
     isCacheValid,
   } = useBitjitaItems();
 
