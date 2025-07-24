@@ -85,7 +85,7 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
       // Try to fetch profile using the secure function to avoid RLS issues
       const profileResult = await supabaseClient.rpc(
         'get_user_profile_with_role',
-        { target_user_id: effectiveUserId }
+        { target_user_id: effectiveUserId },
       );
 
       // If profile fetch fails, handle the error
@@ -134,11 +134,13 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
             created_at: profile.created_at,
             updated_at: profile.updated_at,
             role_id: profile.role_id,
-            role: profile.role_name ? {
-              id: profile.role_id,
-              name: profile.role_name,
-              description: profile.role_description,
-            } : null,
+            role: profile.role_name
+              ? {
+                  id: profile.role_id,
+                  name: profile.role_name,
+                  description: profile.role_description,
+                }
+              : null,
           };
         } else {
           throw new Error('User profile not found');

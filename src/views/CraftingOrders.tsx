@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Container,
   Title,
@@ -14,7 +14,6 @@ import {
   Badge,
   Switch,
   Modal,
-  TextInput,
   NumberInput,
   Select,
   Avatar,
@@ -27,7 +26,8 @@ import {
   IconPlus,
   IconArrowLeft,
   IconCheck,
-  IconSearch,
+  IconX,
+  IconUserMinus,
 } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { supabaseClient } from '../supabase/supabaseClient';
@@ -80,15 +80,69 @@ export function CraftingOrders() {
   const [modalOpened, { open: openModal, close: closeModal }] =
     useDisclosure(false);
   const [items, setItems] = useState<BitjitaItem[]>([]);
+  const [allItems, setAllItems] = useState<BitjitaItem[]>([]); // Store all items for local filtering
   const [itemsLoading, setItemsLoading] = useState(false);
+  const [itemsLoaded, setItemsLoaded] = useState(false); // Track if items have been loaded
   const [searchValue, setSearchValue] = useState('');
+  const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Handle search with debouncing and cancellation
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchValue(value);
+
+      // Clear any pending filter operation
+      if (filterTimeoutRef.current) {
+        clearTimeout(filterTimeoutRef.current);
+      }
+
+      // Only proceed if items are loaded
+      if (!itemsLoaded || itemsLoading) return;
+
+      // Debounce the filtering with a very short delay
+      filterTimeoutRef.current = setTimeout(() => {
+        if (!value.trim()) {
+          setItems(allItems.slice(0, 50));
+        } else {
+          const searchLower = value.toLowerCase();
+          const filtered = allItems.filter(
+            (item: BitjitaItem) =>
+              item.name.toLowerCase().includes(searchLower) &&
+              !item.name.endsWith('Output'),
+          );
+          setItems(filtered);
+        }
+      }, 50); // Very short 50ms debounce
+    },
+    [allItems, itemsLoaded, itemsLoading],
+  );
+
+  // Handle modal close
+  const handleCloseModal = () => {
+    // Clear any pending filter operation
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current);
+    }
+    closeModal();
+  };
 
   const { userProfile } = useOptimizedUserWithProfile();
+
+  const sectorOptions = [
+    { value: 'Forest&Wood', label: 'Forest & Wood' },
+    { value: 'Earth&Ore', label: 'Earth & Ore' },
+    { value: 'Wild&Hide', label: 'Wild & Hide' },
+    { value: 'Fields&Cloth', label: 'Fields & Cloth' },
+    { value: 'Waters&Meals', label: 'Waters & Meals' },
+    { value: 'Lore&Trade', label: 'Lore & Trade' },
+    { value: 'SlayerSquad', label: 'Slayer Squad' },
+  ];
 
   const form = useForm({
     initialValues: {
       item_id: '',
       quantity: 1,
+      sector: '',
     },
     validate: {
       item_id: (value) => (!value ? 'Please select an item' : null),
@@ -98,30 +152,79 @@ export function CraftingOrders() {
           : value > 1000
             ? 'Quantity cannot exceed 1000'
             : null,
+      sector: (value) => (!value ? 'Please select a sector' : null),
     },
   });
 
-  const fetchItems = async (search = '') => {
+  const fetchItems = async () => {
     try {
       setItemsLoading(true);
-      const response = await fetch('https://bitjita.com/api/items');
-      const data = await response.json();
 
-      let filteredItems = data;
-      if (search) {
-        filteredItems = data.filter((item: BitjitaItem) =>
-          item.name.toLowerCase().includes(search.toLowerCase()),
+      // Use Supabase database function to fetch from Bitjita API (avoids CORS)
+      const { data, error } = await supabaseClient.rpc('fetch_bitjita_items');
+
+      if (error) {
+        throw new Error(
+          error.message || 'Failed to call fetch_bitjita_items function',
         );
       }
 
-      setItems(filteredItems.slice(0, 50)); // Limit to 50 items for performance
+      // Check if the function returned an error
+      if (data?.error) {
+        throw new Error(data.message || 'API function returned an error');
+      }
+
+      console.log('API Response:', data); // Debug log
+
+      // Handle different response structures
+      let itemsArray = data;
+
+      // If data has a 'data' or 'items' property, use that
+      if (data?.data && Array.isArray(data.data)) {
+        itemsArray = data.data;
+      } else if (data?.items && Array.isArray(data.items)) {
+        itemsArray = data.items;
+      }
+
+      // Ensure we have an array
+      if (!Array.isArray(itemsArray)) {
+        console.error('Unexpected API response structure:', data);
+        throw new Error(
+          `API response is not an array. Got: ${typeof itemsArray}. Structure: ${JSON.stringify(data).substring(0, 200)}...`,
+        );
+      }
+
+      // Convert the items to have string IDs for Mantine Select compatibility
+      const itemsWithStringIds = itemsArray.map((item: any) => ({
+        ...item,
+        id: item.id?.toString() || item.item_id?.toString() || 'unknown',
+      }));
+
+      // Filter out items that end with "Output"
+      const filteredItems = itemsWithStringIds.filter(
+        (item: any) => !item.name?.endsWith('Output'),
+      );
+
+      // Store all items for local filtering
+      setAllItems(filteredItems);
+
+      // Initially show first 50 items
+      setItems(filteredItems.slice(0, 50));
+
+      // Mark items as loaded
+      setItemsLoaded(true);
     } catch (err) {
-      console.error('Failed to fetch items:', err);
+      console.error('Failed to fetch items from API:', err);
       notifications.show({
         title: 'Error',
-        message: 'Failed to load items from API',
+        message: `Failed to load items from API: ${err instanceof Error ? err.message : 'Unknown error'}`,
         color: 'red',
       });
+
+      // Set empty array on error so the UI doesn't break
+      setItems([]);
+      setAllItems([]);
+      setItemsLoaded(false);
     } finally {
       setItemsLoading(false);
     }
@@ -142,11 +245,27 @@ export function CraftingOrders() {
           completed_by_profile:user_profiles!completed_by(in_game_name, email)
         `,
         )
-        .order('status', { ascending: true })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setOrders(data || []);
+
+      // Sort orders with unassigned first, then assigned, then completed
+      const sortedOrders = (data || []).sort((a, b) => {
+        const statusOrder = { unassigned: 0, assigned: 1, completed: 2 };
+        const aOrder = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
+        const bOrder = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
+
+        if (aOrder !== bOrder) {
+          return aOrder - bOrder;
+        }
+
+        // If same status, sort by creation date (newest first)
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
+
+      setOrders(sortedOrders);
     } catch (err) {
       console.error('Failed to fetch orders:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch orders');
@@ -245,19 +364,124 @@ export function CraftingOrders() {
     });
   };
 
+  const cancelOrder = async (orderId: string) => {
+    try {
+      const { error } = await supabaseClient
+        .from('crafting_orders')
+        .delete()
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      notifications.show({
+        title: 'Order Cancelled',
+        message: 'The crafting order has been cancelled and removed.',
+        color: 'blue',
+      });
+
+      await fetchOrders();
+    } catch (err) {
+      console.error('Failed to cancel order:', err);
+      notifications.show({
+        title: 'Cancel Failed',
+        message: err instanceof Error ? err.message : 'Failed to cancel order',
+        color: 'red',
+      });
+    }
+  };
+
+  const confirmCancelOrder = (order: CraftingOrder) => {
+    modals.openConfirmModal({
+      title: 'Cancel Order',
+      children: (
+        <Text size="sm">
+          Are you sure you want to cancel this order? This action cannot be
+          undone.
+          <br />
+          <strong>
+            {order.item_name} (x{order.quantity})
+          </strong>
+        </Text>
+      ),
+      labels: { confirm: 'Cancel Order', cancel: 'Keep Order' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => cancelOrder(order.id),
+    });
+  };
+
+  const unclaimOrder = async (orderId: string) => {
+    try {
+      const { error } = await supabaseClient
+        .from('crafting_orders')
+        .update({
+          status: 'unassigned',
+          claimed_by: null,
+        })
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      notifications.show({
+        title: 'Order Unclaimed',
+        message:
+          'You have unclaimed this order. It is now available for others to claim.',
+        color: 'blue',
+      });
+
+      await fetchOrders();
+    } catch (err) {
+      console.error('Failed to unclaim order:', err);
+      notifications.show({
+        title: 'Unclaim Failed',
+        message: err instanceof Error ? err.message : 'Failed to unclaim order',
+        color: 'red',
+      });
+    }
+  };
+
+  const confirmUnclaimOrder = (order: CraftingOrder) => {
+    modals.openConfirmModal({
+      title: 'Unclaim Order',
+      children: (
+        <Text size="sm">
+          Are you sure you want to unclaim this order? It will be returned to
+          unassigned status and available for others to claim.
+          <br />
+          <strong>
+            {order.item_name} (x{order.quantity})
+          </strong>
+        </Text>
+      ),
+      labels: { confirm: 'Unclaim Order', cancel: 'Keep Claimed' },
+      confirmProps: { color: 'blue' },
+      onConfirm: () => unclaimOrder(order.id),
+    });
+  };
+
   const submitOrder = async (values: typeof form.values) => {
     if (!userProfile) return;
 
-    const selectedItem = items.find((item) => item.id === values.item_id);
-    if (!selectedItem) return;
+    // Look for the selected item in allItems instead of just items
+    const selectedItem = allItems.find((item) => item.id === values.item_id);
+    if (!selectedItem) {
+      console.error('Selected item not found:', values.item_id);
+      notifications.show({
+        title: 'Error',
+        message:
+          'Selected item could not be found. Please try selecting the item again.',
+        color: 'red',
+      });
+      return;
+    }
 
     try {
       const { error } = await supabaseClient.from('crafting_orders').insert({
-        item_id: selectedItem.id,
+        item_id: parseInt(selectedItem.id), // Convert string back to number for database
         item_name: selectedItem.name,
         item_icon: selectedItem.icon,
         item_tier: selectedItem.tier,
         quantity: values.quantity,
+        sector: values.sector,
         placed_by: userProfile.id,
         status: 'unassigned',
       });
@@ -271,7 +495,7 @@ export function CraftingOrders() {
       });
 
       form.reset();
-      closeModal();
+      handleCloseModal();
       await fetchOrders();
     } catch (err) {
       console.error('Failed to create order:', err);
@@ -315,30 +539,35 @@ export function CraftingOrders() {
     showCompleted ? order.status === 'completed' : order.status !== 'completed',
   );
 
-  const itemSelectData = items.map((item) => ({
-    value: item.id,
-    label: `${item.name} (${item.tier})`,
-    item: item, // Store full item for rendering
-  }));
+  const itemSelectData = useMemo(() => {
+    let selectItems = items;
+
+    // If we have a selected item that's not in the current items list, add it
+    const selectedItemId = form.values.item_id;
+    if (selectedItemId && !items.find((item) => item.id === selectedItemId)) {
+      const selectedItem = allItems.find((item) => item.id === selectedItemId);
+      if (selectedItem) {
+        selectItems = [selectedItem, ...items];
+      }
+    }
+
+    return selectItems.map((item) => ({
+      value: item.id,
+      label: `${item.name} (${item.tier})`,
+      item: item, // Store full item for rendering
+    }));
+  }, [items, allItems, form.values.item_id]);
 
   useEffect(() => {
     fetchOrders();
   }, []);
 
   useEffect(() => {
-    if (modalOpened) {
+    if (modalOpened && !itemsLoaded) {
+      // Only fetch items once when modal opens and items haven't been loaded
       fetchItems();
     }
-  }, [modalOpened]);
-
-  useEffect(() => {
-    if (searchValue && modalOpened) {
-      const timeoutId = setTimeout(() => {
-        fetchItems(searchValue);
-      }, 300);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [searchValue, modalOpened]);
+  }, [modalOpened, itemsLoaded]);
 
   if (loading) {
     return (
@@ -416,7 +645,7 @@ export function CraftingOrders() {
                         <Text fw={500}>{order.item_name}</Text>
                         {order.item_tier && (
                           <Text size="xs" c="dimmed">
-                            {order.item_tier}
+                            T{order.item_tier}
                           </Text>
                         )}
                       </div>
@@ -438,7 +667,20 @@ export function CraftingOrders() {
                         Claim Order
                       </Button>
                     ) : order.claimed_by_profile ? (
-                      formatUserName(order.claimed_by_profile)
+                      <Group gap="xs">
+                        <Text>{formatUserName(order.claimed_by_profile)}</Text>
+                        {userProfile && order.claimed_by === userProfile.id && (
+                          <Button
+                            size="xs"
+                            variant="subtle"
+                            color="blue"
+                            leftSection={<IconUserMinus size={12} />}
+                            onClick={() => confirmUnclaimOrder(order)}
+                          >
+                            Unclaim
+                          </Button>
+                        )}
+                      </Group>
                     ) : (
                       'N/A'
                     )}
@@ -450,20 +692,35 @@ export function CraftingOrders() {
                     </Badge>
                   </Table.Td>
                   <Table.Td>
-                    {order.status !== 'completed' &&
-                      canCompleteOrder(order) && (
-                        <Button
-                          size="xs"
-                          color="green"
-                          variant="light"
-                          leftSection={<IconCheck size={14} />}
-                          onClick={() => confirmCompleteOrder(order)}
-                          loading={completingOrder === order.id}
-                          disabled={completingOrder === order.id}
-                        >
-                          Complete
-                        </Button>
-                      )}
+                    <Group gap="xs">
+                      {order.status !== 'completed' &&
+                        canCompleteOrder(order) && (
+                          <Button
+                            size="xs"
+                            color="green"
+                            variant="light"
+                            leftSection={<IconCheck size={14} />}
+                            onClick={() => confirmCompleteOrder(order)}
+                            loading={completingOrder === order.id}
+                            disabled={completingOrder === order.id}
+                          >
+                            Complete
+                          </Button>
+                        )}
+                      {order.status !== 'completed' &&
+                        userProfile &&
+                        order.placed_by === userProfile.id && (
+                          <Button
+                            size="xs"
+                            color="red"
+                            variant="light"
+                            leftSection={<IconX size={14} />}
+                            onClick={() => confirmCancelOrder(order)}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}
@@ -492,25 +749,20 @@ export function CraftingOrders() {
       {/* New Order Modal */}
       <Modal
         opened={modalOpened}
-        onClose={closeModal}
+        onClose={handleCloseModal}
         title="Create New Crafting Order"
         size="md"
       >
         <form onSubmit={form.onSubmit(submitOrder)}>
           <Stack gap="md">
-            <TextInput
-              label="Search Items"
-              placeholder="Type to search for items..."
-              leftSection={<IconSearch size={16} />}
-              value={searchValue}
-              onChange={(event) => setSearchValue(event.currentTarget.value)}
-            />
-
             <Select
               label="Select Item"
               placeholder="Choose an item to craft"
               data={itemSelectData}
               searchable
+              searchValue={searchValue}
+              onSearchChange={handleSearchChange}
+              disabled={itemsLoading}
               nothingFoundMessage={
                 itemsLoading ? 'Loading...' : 'No items found'
               }
@@ -518,17 +770,23 @@ export function CraftingOrders() {
                 const item = (option as any).item;
                 return (
                   <Group gap="xs">
-                    <Avatar src={item.icon} size="sm" />
                     <div>
-                      <Text>{item.name}</Text>
+                      <Text>{item?.name || 'Unknown Item'}</Text>
                       <Text size="xs" c="dimmed">
-                        {item.tier}
+                        T{item?.tier || 'Unknown'}
                       </Text>
                     </div>
                   </Group>
                 );
               }}
               {...form.getInputProps('item_id')}
+            />
+
+            <Select
+              label="Sector"
+              placeholder="Choose a sector"
+              data={sectorOptions}
+              {...form.getInputProps('sector')}
             />
 
             <NumberInput
@@ -540,7 +798,7 @@ export function CraftingOrders() {
             />
 
             <Group justify="flex-end" gap="sm">
-              <Button variant="light" onClick={closeModal}>
+              <Button variant="light" onClick={handleCloseModal}>
                 Cancel
               </Button>
               <Button type="submit">Create Order</Button>

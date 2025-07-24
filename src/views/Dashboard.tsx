@@ -143,10 +143,11 @@ export function Dashboard() {
                   </Group>
                 )}
                 <PermissionGate
-                  permission="orders.read"
+                  permission="crafting_orders.read"
                   fallback={
                     <Text c="red" size="sm" ta="center">
-                      You need 'orders.read' permission to access this page
+                      You need 'crafting_orders.read' permission to access this
+                      page
                     </Text>
                   }
                 >
