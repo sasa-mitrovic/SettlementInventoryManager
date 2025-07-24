@@ -8,7 +8,7 @@ import globals from 'globals';
 export default [
   // Base configuration for all files
   js.configs.recommended,
-  
+
   // Node.js configuration for scraper files and Supabase functions
   {
     files: ['scraper/**/*.js', 'supabase/**/*.{js,ts}'],
@@ -24,7 +24,7 @@ export default [
       'no-unused-vars': 'error',
     },
   },
-  
+
   // React/TypeScript configuration for src files
   {
     files: ['src/**/*.{ts,tsx}'],
@@ -50,13 +50,13 @@ export default [
     rules: {
       ...typescript.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
-      
+
       // React Refresh
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
       ],
-      
+
       // Unused imports and variables
       '@typescript-eslint/no-unused-vars': [
         'error',
@@ -69,18 +69,18 @@ export default [
         },
       ],
       'no-unused-vars': 'off', // Turn off base rule as it can report incorrect errors
-      
+
       // Import/export rules
       'no-duplicate-imports': 'error',
-      
+
       // React specific unused rules
       'react-hooks/exhaustive-deps': 'warn',
-      
+
       // Allow console in dev
       'no-console': 'off',
     },
   },
-  
+
   // Configuration for root files
   {
     files: ['*.{js,ts}', '*.config.{js,ts}'],
@@ -92,7 +92,7 @@ export default [
       sourceType: 'module',
     },
   },
-  
+
   // Global ignores
   {
     ignores: ['dist', 'node_modules', 'scraped-data'],
