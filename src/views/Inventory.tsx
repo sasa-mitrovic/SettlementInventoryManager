@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Title,
@@ -39,7 +39,7 @@ import { useHasAnyPermission } from '../supabase/optimizedRoleHooks';
 import { useOptimizedUser } from '../supabase/loader';
 import { useDebouncedValue, useDisclosure } from '@mantine/hooks';
 import { CraftingOrderModal } from '../components/CraftingOrderModal';
-import { useBitjitaItems } from '../services/bitjitaItemsCache';
+import { useUnifiedItems } from '../services/unifiedItemService';
 
 interface InventoryItem {
   id: string;
@@ -134,8 +134,64 @@ export function Inventory() {
     'users.manage_roles',
   ]);
 
-  // Get global items from cache
-  const { items: globalItems, loading: globalItemsLoading } = useBitjitaItems();
+  // Get unified items and cargos from cache
+  const { items: globalItems, loading: globalItemsLoading } = useUnifiedItems();
+
+  // Debug log to verify unified data
+  React.useEffect(() => {
+    console.log('[Inventory] Unified items loaded:', globalItems?.length || 0);
+    const itemCount = globalItems.filter((item) => item.type === 'item').length;
+    const cargoCount = globalItems.filter(
+      (item) => item.type === 'cargo',
+    ).length;
+    console.log(
+      `[Inventory] Breakdown: ${itemCount} items + ${cargoCount} cargos = ${globalItems.length} total`,
+    );
+    if (globalItems && globalItems.length > 0) {
+      const leatherCargos = globalItems.filter(
+        (item) =>
+          item.type === 'cargo' && item.name.toLowerCase().includes('leather'),
+      );
+      console.log('[Inventory] Leather cargos found:', leatherCargos.length);
+      console.log(
+        '[Inventory] Sample leather cargos:',
+        leatherCargos.slice(0, 5).map((c) => c.name),
+      );
+
+      // Test search for other items
+      const stoneCargos = globalItems.filter(
+        (item) =>
+          item.type === 'cargo' && item.name.toLowerCase().includes('stone'),
+      );
+      console.log('[Inventory] Stone cargos found:', stoneCargos.length);
+      console.log(
+        '[Inventory] Sample stone cargos:',
+        stoneCargos.slice(0, 5).map((c) => c.name),
+      );
+
+      // Test search patterns that user is trying
+      const sheetCargos = globalItems.filter(
+        (item) =>
+          item.type === 'cargo' && item.name.toLowerCase().includes('sheet'),
+      );
+      console.log('[Inventory] "sheet" search result:', sheetCargos.length);
+
+      const sheetingCargos = globalItems.filter(
+        (item) =>
+          item.type === 'cargo' && item.name.toLowerCase().includes('sheeting'),
+      );
+      console.log(
+        '[Inventory] "sheeting" search result:',
+        sheetingCargos.length,
+      );
+
+      const packageCargos = globalItems.filter(
+        (item) =>
+          item.type === 'cargo' && item.name.toLowerCase().includes('package'),
+      );
+      console.log('[Inventory] "package" search result:', packageCargos.length);
+    }
+  }, [globalItems]);
   // Theme-aware color function for target highlighting
   const getTargetColors = () => {
     if (computedColorScheme === 'dark') {
@@ -540,19 +596,22 @@ export function Inventory() {
       }
     });
 
-    // Second pass: Add items from global cache that aren't in settlement inventory
-    globalItems.forEach((globalItem) => {
-      const packageInfo = getPackageInfo(globalItem.name);
+    // Second pass: Add items from unified cache that aren't in settlement inventory
+    globalItems.forEach((unifiedItem) => {
+      const packageInfo = getPackageInfo(unifiedItem.name);
       const key = packageInfo.baseItemName;
 
       // Only add if not already in settlement inventory
       if (!combined[key]) {
         const newItem: CombinedInventoryItem = {
           item_name: packageInfo.baseItemName,
-          tier: globalItem.tier ? parseInt(globalItem.tier) : null,
-          rarity: globalItem.rarityStr || globalItem.rarity || null,
+          tier:
+            typeof unifiedItem.tier === 'string'
+              ? parseInt(unifiedItem.tier)
+              : unifiedItem.tier || null,
+          rarity: unifiedItem.rarityStr || unifiedItem.rarity || null,
           total_quantity: 0, // Not in settlement, so quantity is 0
-          icon: globalItem.iconAssetName || globalItem.icon || null,
+          icon: unifiedItem.iconAssetName || null,
           package_breakdown: {
             base_quantity: 0,
             package_items: [],
@@ -562,6 +621,29 @@ export function Inventory() {
         combined[key] = newItem;
       }
     });
+
+    console.log(
+      '[getCombinedInventory] Total unified items processed:',
+      globalItems.length,
+    );
+
+    // Debug: Log sample combined items to verify cargo items are included
+    const allCombinedItems = Object.values(combined);
+    const sampleCargos = allCombinedItems
+      .filter(
+        (item) =>
+          item.item_name.toLowerCase().includes('package') ||
+          item.item_name.toLowerCase().includes('sheeting'),
+      )
+      .slice(0, 10);
+    console.log(
+      '[getCombinedInventory] Sample cargo items in combined inventory:',
+      sampleCargos.map((item) => item.item_name),
+    );
+    console.log(
+      '[getCombinedInventory] Total combined items:',
+      allCombinedItems.length,
+    );
 
     if (packageDetectionCount > 0) {
       // Package detection completed successfully
@@ -586,10 +668,12 @@ export function Inventory() {
   const getContainerGroups = () => {
     const groups: { [key: string]: InventoryItem[] } = {};
     inventory.forEach((item) => {
-      if (!groups[item.location]) {
-        groups[item.location] = [];
+      // Create a unique key using building_id to separate containers with same name
+      const uniqueKey = `${item.location}|${item.building_id}`;
+      if (!groups[uniqueKey]) {
+        groups[uniqueKey] = [];
       }
-      groups[item.location].push(item);
+      groups[uniqueKey].push(item);
     });
     return groups;
   };
@@ -614,9 +698,24 @@ export function Inventory() {
 
   const filterItems = <T extends { item_name: string }>(items: T[]): T[] => {
     if (!debouncedSearch) return items;
-    return items.filter((item) =>
+    const filtered = items.filter((item) =>
       item.item_name.toLowerCase().includes(debouncedSearch.toLowerCase()),
     );
+
+    // Debug: Log filtering results
+    if (debouncedSearch) {
+      console.log(
+        `[filterItems] Searching for "${debouncedSearch}" in ${items.length} items, found ${filtered.length} matches`,
+      );
+      if (filtered.length > 0 && filtered.length <= 10) {
+        console.log(
+          '[filterItems] Matches:',
+          filtered.map((item) => item.item_name),
+        );
+      }
+    }
+
+    return filtered;
   };
 
   // Pagination helper function for combined totals
@@ -699,65 +798,74 @@ export function Inventory() {
             <Accordion variant="separated">
               {Object.entries(getContainerGroups())
                 .sort(([a], [b]) => a.localeCompare(b))
-                .map(([containerName, items]) => (
-                  <Accordion.Item key={containerName} value={containerName}>
-                    <Accordion.Control>
-                      <Group>
-                        <Text fw={600}>{containerName}</Text>
-                        <Badge size="sm" variant="light">
-                          {filterItems(items).length} items
-                        </Badge>
-                      </Group>
-                    </Accordion.Control>
-                    <Accordion.Panel>
-                      <Table striped highlightOnHover>
-                        <Table.Thead>
-                          <Table.Tr>
-                            <SortableHeader field="item_name">
-                              Item
-                            </SortableHeader>
-                            <SortableHeader field="tier">Tier</SortableHeader>
-                            <SortableHeader field="rarity">
-                              Rarity
-                            </SortableHeader>
-                            <SortableHeader field="quantity">
-                              Quantity
-                            </SortableHeader>
-                          </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                          {sortItems(filterItems(items)).map((item) => (
-                            <Table.Tr key={item.id}>
-                              <Table.Td>
-                                <Group gap="sm">
-                                  <ItemIcon item={item} />
-                                  <Text fw={500}>{item.item_name}</Text>
-                                </Group>
-                              </Table.Td>
-                              <Table.Td>
-                                <Text>{item.tier || 'N/A'}</Text>
-                              </Table.Td>
-                              <Table.Td>
-                                <Badge
-                                  color={getRarityColor(item.rarity)}
-                                  size="sm"
-                                  variant="light"
-                                >
-                                  {item.rarity || 'Unknown'}
-                                </Badge>
-                              </Table.Td>
-                              <Table.Td>
-                                <Text fw={600}>
-                                  {item.quantity.toLocaleString()}
-                                </Text>
-                              </Table.Td>
+                .map(([uniqueKey, items]) => {
+                  // Extract location name from the unique key
+                  const [locationName] = uniqueKey.split('|');
+                  // Get the first item to access building info for display
+                  const firstItem = items[0];
+                  const displayName =
+                    firstItem.building_nickname ?? `${locationName}`;
+
+                  return (
+                    <Accordion.Item key={uniqueKey} value={uniqueKey}>
+                      <Accordion.Control>
+                        <Group>
+                          <Text fw={600}>{displayName}</Text>
+                          <Badge size="sm" variant="light">
+                            {filterItems(items).length} items
+                          </Badge>
+                        </Group>
+                      </Accordion.Control>
+                      <Accordion.Panel>
+                        <Table striped highlightOnHover>
+                          <Table.Thead>
+                            <Table.Tr>
+                              <SortableHeader field="item_name">
+                                Item
+                              </SortableHeader>
+                              <SortableHeader field="tier">Tier</SortableHeader>
+                              <SortableHeader field="rarity">
+                                Rarity
+                              </SortableHeader>
+                              <SortableHeader field="quantity">
+                                Quantity
+                              </SortableHeader>
                             </Table.Tr>
-                          ))}
-                        </Table.Tbody>
-                      </Table>
-                    </Accordion.Panel>
-                  </Accordion.Item>
-                ))}
+                          </Table.Thead>
+                          <Table.Tbody>
+                            {sortItems(filterItems(items)).map((item) => (
+                              <Table.Tr key={item.id}>
+                                <Table.Td>
+                                  <Group gap="sm">
+                                    <ItemIcon item={item} />
+                                    <Text fw={500}>{item.item_name}</Text>
+                                  </Group>
+                                </Table.Td>
+                                <Table.Td>
+                                  <Text>{item.tier || 'N/A'}</Text>
+                                </Table.Td>
+                                <Table.Td>
+                                  <Badge
+                                    color={getRarityColor(item.rarity)}
+                                    size="sm"
+                                    variant="light"
+                                  >
+                                    {item.rarity || 'Unknown'}
+                                  </Badge>
+                                </Table.Td>
+                                <Table.Td>
+                                  <Text fw={600}>
+                                    {item.quantity.toLocaleString()}
+                                  </Text>
+                                </Table.Td>
+                              </Table.Tr>
+                            ))}
+                          </Table.Tbody>
+                        </Table>
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  );
+                })}
             </Accordion>
           ) : (
             // Combined totals view with pagination
