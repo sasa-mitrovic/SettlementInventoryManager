@@ -21,6 +21,8 @@ import { useOptimizedUserWithProfile } from '../../supabase/loader';
 import { useHasPermission } from '../../supabase/optimizedRoleHooks';
 import { supabaseClient } from '../../supabase/supabaseClient';
 import { notifications } from '@mantine/notifications';
+// Alternative robust sign out is available at: ../../utils/robustSignOut
+// Production diagnostics available at: ../../utils/productionDiagnostics
 
 export const AppLayout = () => {
   const { userProfile } = useOptimizedUserWithProfile();
@@ -41,6 +43,9 @@ export const AppLayout = () => {
   const handleSignOut = async () => {
     try {
       // Clear any impersonation state first
+      localStorage.removeItem('impersonation_active');
+      localStorage.removeItem('impersonation_target_user');
+      localStorage.removeItem('impersonation_original_admin');
       localStorage.removeItem('impersonating_user_id');
       localStorage.removeItem('impersonating_user_email');
       localStorage.removeItem('original_user_data');
@@ -50,33 +55,61 @@ export const AppLayout = () => {
 
       if (error) {
         console.error('Sign out error:', error);
-        notifications.show({
-          title: 'Sign Out Failed',
-          message: error.message,
-          color: 'red',
-        });
-      } else {
-        notifications.show({
-          title: 'Signed Out Successfully',
-          message: 'You have been successfully signed out.',
-          color: 'green',
-        });
 
-        // Navigate to auth page
-        navigate('/auth');
+        // Check if it's just a session missing error - this is actually OK in production
+        const isSessionMissing =
+          error.message?.toLowerCase().includes('session') ||
+          error.message?.toLowerCase().includes('missing') ||
+          error.message?.toLowerCase().includes('invalid');
 
-        // Force a page reload to ensure clean state
-        setTimeout(() => {
-          window.location.reload();
-        }, 500);
+        if (isSessionMissing) {
+          console.log(
+            'Session already missing/invalid - treating as successful signout',
+          );
+          // Treat as successful since user is already effectively signed out
+        } else {
+          // Show error for other types of failures
+          notifications.show({
+            title: 'Sign Out Failed',
+            message: error.message,
+            color: 'red',
+          });
+          return; // Don't proceed with navigation if there's a real error
+        }
       }
+
+      // Show success message (either normal success or session was already missing)
+      notifications.show({
+        title: 'Signed Out Successfully',
+        message: 'You have been successfully signed out.',
+        color: 'green',
+      });
+
+      // Navigate to auth page
+      navigate('/auth');
+
+      // Force a page reload to ensure clean state
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (err) {
       console.error('Unexpected sign out error:', err);
+
+      // Even if there's an unexpected error, we should still try to clear local state
+      // and redirect to auth page since the user clicked sign out
+      localStorage.clear();
+
       notifications.show({
-        title: 'Sign Out Error',
-        message: 'An unexpected error occurred while signing out.',
-        color: 'red',
+        title: 'Sign Out',
+        message: 'Redirecting to sign in page...',
+        color: 'blue',
       });
+
+      navigate('/auth');
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     }
   };
 
