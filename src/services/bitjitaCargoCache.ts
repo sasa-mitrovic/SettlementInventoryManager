@@ -66,13 +66,13 @@ class BitjitaCargoCache {
     return STATIC_CARGO_DATA.map((staticCargo) => ({
       id: staticCargo.id,
       name: staticCargo.name,
-      description: `A ${staticCargo.rarity.toLowerCase()} tier ${staticCargo.tier} cargo item.`,
-      volume: 1,
+      description: staticCargo.description,
+      volume: staticCargo.volume,
       tier: staticCargo.tier,
-      tag: 'materials',
-      rarity: this.rarityStringToNumber(staticCargo.rarity),
-      rarityStr: staticCargo.rarity,
-      iconAssetName: staticCargo.icon,
+      tag: staticCargo.tag,
+      rarity: staticCargo.rarity,
+      rarityStr: staticCargo.rarityStr,
+      iconAssetName: staticCargo.iconAssetName,
       modelAssetName: '',
       carriedModelAssetName: '',
       pickUpTime: 1000,
@@ -87,23 +87,6 @@ class BitjitaCargoCache {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }));
-  }
-
-  private rarityStringToNumber(rarity: string): number {
-    switch (rarity) {
-      case 'Common':
-        return 1;
-      case 'Uncommon':
-        return 2;
-      case 'Rare':
-        return 3;
-      case 'Epic':
-        return 4;
-      case 'Legendary':
-        return 5;
-      default:
-        return 1;
-    }
   }
 
   private loadFromLocalStorage(): void {
