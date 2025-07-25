@@ -15,19 +15,18 @@ async function runManualUpdate() {
     // First, update all profiles to get baseline data
     console.log('Phase 1: Updating all user profiles...');
     await updater.updateAllProfiles();
-    
+
     console.log('\n' + '='.repeat(50) + '\n');
-    
+
     // Then check for any that might need updates (stale profiles)
     console.log('Phase 2: Checking for stale profiles...');
     await updater.updateStaleProfiles(1); // Check profiles older than 1 hour
-    
+
     console.log('\n✅ Manual update process completed!');
-    
   } catch (error) {
     console.error('❌ Error during manual update:', error);
   }
-  
+
   process.exit(0);
 }
 

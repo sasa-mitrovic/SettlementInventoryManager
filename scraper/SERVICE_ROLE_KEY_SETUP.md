@@ -1,14 +1,17 @@
 # SERVICE ROLE KEY SETUP INSTRUCTIONS
 
 ## Problem Identified
+
 The user profile updater is using the anon key instead of the service role key, which means it can't access user profiles due to Row Level Security (RLS) policies.
 
 ## Solution
+
 You need to get your Service Role Key from Supabase and update the .env file.
 
 ## Steps to Fix:
 
 ### 1. Get Service Role Key from Supabase Dashboard
+
 1. Go to your Supabase Dashboard: https://supabase.com/dashboard
 2. Select your project: `wivnmjigpxsonvgzwito`
 3. Go to **Settings** > **API**
@@ -16,6 +19,7 @@ You need to get your Service Role Key from Supabase and update the .env file.
 5. Copy the service_role key (it will be different from the anon key)
 
 ### 2. Update the .env file
+
 Edit `c:\Projects\SettlementInventoryManager\scraper\.env` and replace the line:
 
 ```env
@@ -29,6 +33,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_actual_service_role_key_here
 ```
 
 ### 3. Test the Fix
+
 After updating the service role key, run:
 
 ```powershell
@@ -39,6 +44,7 @@ node test-db-connection.js
 You should see it find 12 user profiles instead of 0.
 
 ### 4. Run the Profile Updates
+
 Once the connection works, run:
 
 ```powershell
@@ -50,12 +56,15 @@ node manual-profile-update.js
 ```
 
 ## Security Note
+
 The service role key has full database access and should be kept secret. Don't commit it to version control.
 
 ## Expected Results
+
 After fixing the service role key, the updater should find and update these users:
+
 - MoWine
-- Larian  
+- Larian
 - AlannahRaven
 - TestUser
 - Lusti

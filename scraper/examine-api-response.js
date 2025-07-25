@@ -9,17 +9,19 @@ async function examineAPIResponse() {
     const response = await fetch('https://bitjita.com/api/players?q=Lusti');
     console.log(`Status: ${response.status}`);
     console.log(`Content-Type: ${response.headers.get('content-type')}`);
-    
+
     if (response.ok) {
       const data = await response.json();
       console.log('\nResponse structure:');
       console.log(`Type: ${typeof data}`);
       console.log(`Is Array: ${Array.isArray(data)}`);
-      console.log(`Keys: ${typeof data === 'object' ? Object.keys(data) : 'N/A'}`);
-      
+      console.log(
+        `Keys: ${typeof data === 'object' ? Object.keys(data) : 'N/A'}`,
+      );
+
       console.log('\nFull response:');
       console.log(JSON.stringify(data, null, 2));
-      
+
       // Try to find the player data
       if (Array.isArray(data)) {
         console.log(`\nFound ${data.length} players in array`);
