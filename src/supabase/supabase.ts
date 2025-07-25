@@ -80,6 +80,9 @@ export interface Database {
           email: string;
           avatar_url: string | null;
           is_active: boolean;
+          empire: string | null;
+          bitjita_user_id: string | null;
+          bitjita_empire_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -92,6 +95,9 @@ export interface Database {
           email: string;
           avatar_url?: string | null;
           is_active?: boolean;
+          empire?: string | null;
+          bitjita_user_id?: string | null;
+          bitjita_empire_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -104,6 +110,9 @@ export interface Database {
           email?: string;
           avatar_url?: string | null;
           is_active?: boolean;
+          empire?: string | null;
+          bitjita_user_id?: string | null;
+          bitjita_empire_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -300,6 +309,55 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
+      check_username_availability: {
+        Args: {
+          username_to_check: string;
+        };
+        Returns: {
+          available: boolean;
+          message: string;
+          existing_user_id?: string;
+          existing_email?: string;
+          error?: string;
+        };
+      };
+      complete_user_signup: {
+        Args: {
+          user_id: string;
+          user_email: string;
+          user_in_game_name: string;
+          user_empire?: string;
+          user_bitjita_user_id?: string;
+          user_bitjita_empire_id?: string;
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+          error?: string;
+        };
+      };
+      get_crafting_orders_with_names: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+          item_id: string;
+          item_name: string;
+          item_icon: string | null;
+          item_tier: string | null;
+          quantity: number;
+          sector: string | null;
+          status: 'unassigned' | 'assigned' | 'completed';
+          placed_by: string;
+          claimed_by: string | null;
+          completed_at: string | null;
+          completed_by: string | null;
+          placed_by_name: string | null;
+          claimed_by_name: string | null;
+          completed_by_name: string | null;
+        }[];
+      };
       get_user_permissions: {
         Args: {
           user_id: string;

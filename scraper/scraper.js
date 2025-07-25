@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
+import { UserProfileUpdater } from './user-profile-updater.js';
 
 // Load environment variables from the current directory
 dotenv.config();
@@ -24,6 +25,9 @@ class BitjitaScraper {
   constructor() {
     this.settlementId = '144115188105096768';
     this.baseUrl = 'https://bitjita.com';
+    this.userProfileUpdater = new UserProfileUpdater();
+    this.lastProfileUpdate = null;
+    this.profileUpdateInterval = 30; // Update profiles every 30 minutes
   }
 
   async scrapeInventoryData() {
@@ -683,9 +687,35 @@ class BitjitaScraper {
         this.updateSkillsData(skills),
       ]);
 
+      // Check if it's time to update user profiles
+      await this.updateUserProfilesIfNeeded();
+
       console.log('=== Scrape cycle completed successfully ===\n');
     } catch (error) {
       console.error('Error in scrape cycle:', error);
+    }
+  }
+
+  async updateUserProfilesIfNeeded() {
+    try {
+      const now = new Date();
+      
+      // Check if enough time has passed since last profile update
+      if (this.lastProfileUpdate && 
+          (now - this.lastProfileUpdate) / (1000 * 60) < this.profileUpdateInterval) {
+        return; // Not time yet
+      }
+
+      console.log('\n🔄 Running user profile updates...');
+      
+      // Update stale profiles (profiles older than 24 hours)
+      await this.userProfileUpdater.updateStaleProfiles(24);
+      
+      this.lastProfileUpdate = now;
+      console.log('✅ User profile updates completed\n');
+      
+    } catch (error) {
+      console.error('Error updating user profiles:', error);
     }
   }
 
@@ -695,6 +725,7 @@ class BitjitaScraper {
     );
     console.log(`Settlement ID: ${this.settlementId}`);
     console.log(`Supabase URL: ${supabaseUrl}`);
+    console.log(`Profile update interval: ${this.profileUpdateInterval} minutes`);
 
     // Run initial scrape
     this.scrapeAndUpdate();

@@ -50,6 +50,7 @@
     "postcss-preset-mantine": "^1.17.0",
     "postcss-simple-vars": "^7.0.1",
     "prettier": "^3.5.3",
+    "supabase": "^2.31.8",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
     "vite": "^6.3.5"
