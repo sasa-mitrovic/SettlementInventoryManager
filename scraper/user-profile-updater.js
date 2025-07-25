@@ -11,7 +11,9 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('Missing Supabase environment variables');
-  console.error('Make sure VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in .env file');
+  console.error(
+    'Make sure VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in .env file',
+  );
   process.exit(1);
 }
 
@@ -28,9 +30,9 @@ class UserProfileUpdater {
    */
   async searchPlayer(username) {
     try {
-      // Step 1: Search for player to get entityId  
+      // Step 1: Search for player to get entityId
       const searchUrl = `${this.baseUrl}/players?q=${encodeURIComponent(username)}`;
-      
+
       const response = await fetch(searchUrl);
 
       if (!response.ok) {
@@ -38,14 +40,14 @@ class UserProfileUpdater {
       }
 
       const searchData = await response.json();
-      
+
       if (!searchData.players || searchData.players.length === 0) {
         return null;
       }
 
       // Find the exact match (case-insensitive)
-      const exactMatch = searchData.players.find(player => 
-        player.username.toLowerCase() === username.toLowerCase()
+      const exactMatch = searchData.players.find(
+        (player) => player.username.toLowerCase() === username.toLowerCase(),
       );
 
       if (!exactMatch) {
@@ -57,30 +59,31 @@ class UserProfileUpdater {
       const detailResponse = await fetch(detailUrl);
 
       if (!detailResponse.ok) {
-        console.log(`Failed to get detailed info for ${username}, using basic data`);
+        console.log(
+          `Failed to get detailed info for ${username}, using basic data`,
+        );
         // Return basic data if detailed call fails
         return {
           entityId: exactMatch.entityId,
           username: exactMatch.username,
           userId: exactMatch.entityId, // Use entityId as userId fallback
-          empireMemberships: []
+          empireMemberships: [],
         };
       }
 
       const detailedData = await detailResponse.json();
-      
+
       // The API returns data wrapped in a "player" object
       const playerData = detailedData.player || detailedData;
-      
+
       // Combine search data with detailed data
       return {
         entityId: exactMatch.entityId,
         username: exactMatch.username,
         userId: playerData.entityId || exactMatch.entityId,
         empireMemberships: playerData.empireMemberships || [],
-        ...playerData // Include any other fields from detailed response
+        ...playerData, // Include any other fields from detailed response
       };
-
     } catch (error) {
       console.error(`Error searching for player ${username}:`, error.message);
       return null;
@@ -92,25 +95,28 @@ class UserProfileUpdater {
    */
   async getPlayerEmpireInfo(playerData) {
     try {
-      if (!playerData.empireMemberships || playerData.empireMemberships.length === 0) {
+      if (
+        !playerData.empireMemberships ||
+        playerData.empireMemberships.length === 0
+      ) {
         return {
           empireName: null,
-          empireId: null
+          empireId: null,
         };
       }
 
       // Get the first (primary) empire membership
       const primaryEmpire = playerData.empireMemberships[0];
-      
+
       return {
         empireName: primaryEmpire.empireName || null,
-        empireId: primaryEmpire.empireEntityId || null
+        empireId: primaryEmpire.empireEntityId || null,
       };
     } catch (error) {
       console.error('Error getting empire info:', error.message);
       return {
         empireName: null,
-        empireId: null
+        empireId: null,
       };
     }
   }
@@ -131,7 +137,9 @@ class UserProfileUpdater {
       const playerData = await this.searchPlayer(userProfile.in_game_name);
 
       if (!playerData) {
-        console.log(`❌ Player ${userProfile.in_game_name} not found in Bitjita API`);
+        console.log(
+          `❌ Player ${userProfile.in_game_name} not found in Bitjita API`,
+        );
         return false;
       }
 
@@ -143,11 +151,11 @@ class UserProfileUpdater {
         empire: empireInfo.empireName,
         bitjita_user_id: playerData.entityId || null,
         bitjita_empire_id: empireInfo.empireId,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
       // Only update if we have new data
-      const hasChanges = 
+      const hasChanges =
         updateData.empire !== userProfile.empire ||
         updateData.bitjita_user_id !== userProfile.bitjita_user_id ||
         updateData.bitjita_empire_id !== userProfile.bitjita_empire_id;
@@ -164,7 +172,10 @@ class UserProfileUpdater {
         .eq('id', userProfile.id);
 
       if (error) {
-        console.error(`❌ Error updating ${userProfile.in_game_name}:`, error.message);
+        console.error(
+          `❌ Error updating ${userProfile.in_game_name}:`,
+          error.message,
+        );
         return false;
       }
 
@@ -175,7 +186,10 @@ class UserProfileUpdater {
 
       return true;
     } catch (error) {
-      console.error(`❌ Error updating profile for ${userProfile.in_game_name}:`, error.message);
+      console.error(
+        `❌ Error updating profile for ${userProfile.in_game_name}:`,
+        error.message,
+      );
       return false;
     }
   }
@@ -224,7 +238,7 @@ class UserProfileUpdater {
 
       for (const profile of userProfiles) {
         const success = await this.updateUserProfile(profile);
-        
+
         if (success) {
           updated++;
         } else {
@@ -237,7 +251,7 @@ class UserProfileUpdater {
         }
 
         // Add a small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
       console.log('\n📈 Update Summary:');
@@ -245,7 +259,6 @@ class UserProfileUpdater {
       console.log(`⏭️  Skipped (not found): ${skipped}`);
       console.log(`❌ Errors: ${errors}`);
       console.log(`📊 Total processed: ${userProfiles.length}`);
-
     } catch (error) {
       console.error('Error in updateAllProfiles:', error.message);
     }
@@ -257,7 +270,9 @@ class UserProfileUpdater {
    */
   async updateStaleProfiles(hoursThreshold = 24) {
     try {
-      console.log(`🔄 Checking for profiles updated more than ${hoursThreshold} hours ago...\n`);
+      console.log(
+        `🔄 Checking for profiles updated more than ${hoursThreshold} hours ago...\n`,
+      );
 
       const cutoffTime = new Date();
       cutoffTime.setHours(cutoffTime.getHours() - hoursThreshold);
@@ -276,7 +291,9 @@ class UserProfileUpdater {
       const userProfiles = data || [];
 
       if (userProfiles.length === 0) {
-        console.log(`ℹ️  No stale profiles found (threshold: ${hoursThreshold} hours)`);
+        console.log(
+          `ℹ️  No stale profiles found (threshold: ${hoursThreshold} hours)`,
+        );
         return;
       }
 
@@ -288,7 +305,7 @@ class UserProfileUpdater {
 
       for (const profile of userProfiles) {
         const success = await this.updateUserProfile(profile);
-        
+
         if (success) {
           updated++;
         } else {
@@ -301,7 +318,7 @@ class UserProfileUpdater {
         }
 
         // Add a small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
       console.log('\n📈 Stale Profile Update Summary:');
@@ -309,7 +326,6 @@ class UserProfileUpdater {
       console.log(`⏭️  Skipped (not found): ${skipped}`);
       console.log(`❌ Errors: ${errors}`);
       console.log(`📊 Total processed: ${userProfiles.length}`);
-
     } catch (error) {
       console.error('Error in updateStaleProfiles:', error.message);
     }
@@ -322,9 +338,9 @@ export { UserProfileUpdater };
 // CLI functionality for running directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   const updater = new UserProfileUpdater();
-  
+
   const command = process.argv[2];
-  
+
   switch (command) {
     case 'all':
       await updater.updateAllProfiles();
@@ -340,7 +356,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         process.exit(1);
       }
       const profiles = await updater.getUserProfiles();
-      const profile = profiles.find(p => p.in_game_name.toLowerCase() === username.toLowerCase());
+      const profile = profiles.find(
+        (p) => p.in_game_name.toLowerCase() === username.toLowerCase(),
+      );
       if (profile) {
         await updater.updateUserProfile(profile);
       } else {
@@ -351,9 +369,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.log('Bitjita User Profile Updater');
       console.log('');
       console.log('Usage:');
-      console.log('  node user-profile-updater.js all                    # Update all profiles');
-      console.log('  node user-profile-updater.js stale [hours]          # Update stale profiles (default: 24 hours)');
-      console.log('  node user-profile-updater.js user <username>        # Update specific user');
+      console.log(
+        '  node user-profile-updater.js all                    # Update all profiles',
+      );
+      console.log(
+        '  node user-profile-updater.js stale [hours]          # Update stale profiles (default: 24 hours)',
+      );
+      console.log(
+        '  node user-profile-updater.js user <username>        # Update specific user',
+      );
       console.log('');
       console.log('Examples:');
       console.log('  node user-profile-updater.js all');
@@ -361,6 +385,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.log('  node user-profile-updater.js user Lusti');
       break;
   }
-  
+
   process.exit(0);
 }

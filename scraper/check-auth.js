@@ -4,7 +4,10 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+);
 
 console.log('🔍 Checking Auth Users and Profile System');
 console.log('========================================\n');
@@ -13,7 +16,7 @@ async function checkAuthAndProfiles() {
   try {
     // Check auth.users table (this requires admin access)
     console.log('Step 1: Checking if we can access user data...');
-    
+
     // Check user_profiles table structure
     console.log('Step 2: Checking user_profiles table structure...');
     const { data: tableInfo, error: tableError } = await supabase
@@ -44,11 +47,13 @@ async function checkAuthAndProfiles() {
     if (count === 0) {
       console.log('\n🤔 No user profiles found. This means:');
       console.log('   1. No users have signed up yet, OR');
-      console.log('   2. The signup process isn\'t creating profiles properly');
+      console.log("   2. The signup process isn't creating profiles properly");
       console.log('\n💡 Solutions:');
       console.log('   1. Test the signup process by creating a user');
       console.log('   2. Check if the handle_new_user trigger is working');
-      console.log('   3. Manually create a test profile for testing the updater');
+      console.log(
+        '   3. Manually create a test profile for testing the updater',
+      );
     }
 
     // Test creating a sample profile for testing
@@ -60,7 +65,6 @@ async function checkAuthAndProfiles() {
     console.log('   Email: test@example.com');
     console.log('   In-game name: Lusti');
     console.log('   This would test the Bitjita API integration');
-
   } catch (error) {
     console.error('❌ Check error:', error);
   }

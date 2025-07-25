@@ -20,21 +20,23 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function removeBitjitaEntityId() {
   try {
-    console.log('🔄 Removing bitjita_entity_id column from user_profiles table...');
-    
+    console.log(
+      '🔄 Removing bitjita_entity_id column from user_profiles table...',
+    );
+
     // Step 1: Drop the column
     console.log('   - Dropping bitjita_entity_id column...');
     const { error: dropError } = await supabase.rpc('exec_sql', {
-      sql: 'ALTER TABLE public.user_profiles DROP COLUMN IF EXISTS bitjita_entity_id;'
+      sql: 'ALTER TABLE public.user_profiles DROP COLUMN IF EXISTS bitjita_entity_id;',
     });
-    
+
     if (dropError) {
       console.error('❌ Error dropping column:', dropError);
       return;
     }
-    
+
     console.log('   ✅ Column dropped successfully');
-    
+
     // Step 2: Update the trigger function
     console.log('   - Updating handle_new_user function...');
     const newUserFunction = `
@@ -65,16 +67,16 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;`;
 
     const { error: functionError } = await supabase.rpc('exec_sql', {
-      sql: newUserFunction
+      sql: newUserFunction,
     });
-    
+
     if (functionError) {
       console.error('❌ Error updating function:', functionError);
       return;
     }
-    
+
     console.log('   ✅ Function updated successfully');
-    
+
     // Step 3: Update the update_user_profile_from_auth function
     console.log('   - Updating update_user_profile_from_auth function...');
     const updateFunction = `
@@ -99,44 +101,48 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;`;
 
     const { error: updateFunctionError } = await supabase.rpc('exec_sql', {
-      sql: updateFunction
+      sql: updateFunction,
     });
-    
+
     if (updateFunctionError) {
       console.error('❌ Error updating update function:', updateFunctionError);
       return;
     }
-    
+
     console.log('   ✅ Update function updated successfully');
-    
+
     // Step 4: Verify the schema
     console.log('   - Verifying table schema...');
-    const { data: columns, error: schemaError } = await supabase.rpc('exec_sql', {
-      sql: `
+    const { data: columns, error: schemaError } = await supabase.rpc(
+      'exec_sql',
+      {
+        sql: `
         SELECT column_name, data_type 
         FROM information_schema.columns 
         WHERE table_name = 'user_profiles' 
         AND table_schema = 'public'
         ORDER BY ordinal_position;
-      `
-    });
-    
+      `,
+      },
+    );
+
     if (schemaError) {
       console.error('❌ Error checking schema:', schemaError);
       return;
     }
-    
+
     console.log('   📋 Current user_profiles columns:');
     if (columns && Array.isArray(columns)) {
-      columns.forEach(col => {
+      columns.forEach((col) => {
         console.log(`      - ${col.column_name} (${col.data_type})`);
       });
     }
-    
+
     console.log('\n✅ Migration completed successfully!');
     console.log('   The bitjita_entity_id column has been removed.');
-    console.log('   Only bitjita_user_id remains (containing the entity ID value).');
-    
+    console.log(
+      '   Only bitjita_user_id remains (containing the entity ID value).',
+    );
   } catch (error) {
     console.error('❌ Migration failed:', error);
   } finally {

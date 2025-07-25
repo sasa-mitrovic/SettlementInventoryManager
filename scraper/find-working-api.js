@@ -16,19 +16,19 @@ async function findWorkingAPI() {
 
   // Test different possible API structures
   console.log('\nTest 2: Testing various API patterns...');
-  
+
   const testPatterns = [
     // Different base paths
     'https://bitjita.com/api/v1/player/search?name=Lusti',
     'https://bitjita.com/api/v2/player/search?name=Lusti',
     'https://bitjita.com/api/search/player?name=Lusti',
     'https://bitjita.com/search/player?name=Lusti',
-    
+
     // Different parameter names
     'https://bitjita.com/api/player/search?username=Lusti',
     'https://bitjita.com/api/player/search?player=Lusti',
     'https://bitjita.com/api/player/search?q=Lusti',
-    
+
     // GraphQL or different formats
     'https://bitjita.com/graphql',
     'https://bitjita.com/api/graphql',
@@ -39,10 +39,10 @@ async function findWorkingAPI() {
       console.log(`  Testing: ${url}`);
       const response = await fetch(url);
       console.log(`    Status: ${response.status} ${response.statusText}`);
-      
+
       const contentType = response.headers.get('content-type') || '';
       console.log(`    Content-Type: ${contentType}`);
-      
+
       if (response.status === 200 && contentType.includes('json')) {
         const data = await response.text();
         console.log(`    ✅ JSON Response found! First 200 chars:`);
@@ -56,19 +56,19 @@ async function findWorkingAPI() {
   // Test if we can access a player profile directly (like from browser)
   console.log('\nTest 3: Testing direct player access...');
   try {
-    const playerUrl = 'https://bitjita.com/player/Lusti';  // Direct player page
+    const playerUrl = 'https://bitjita.com/player/Lusti'; // Direct player page
     const response = await fetch(playerUrl);
     console.log(`Player page status: ${response.status}`);
-    
+
     if (response.ok) {
       const html = await response.text();
       console.log(`Player page accessible: Yes (${html.length} chars)`);
-      
+
       // Look for API calls in the HTML/JavaScript
       const apiMatches = html.match(/\/api\/[^"'\s]+/g);
       if (apiMatches) {
         console.log('Found potential API endpoints in HTML:');
-        [...new Set(apiMatches)].slice(0, 5).forEach(match => {
+        [...new Set(apiMatches)].slice(0, 5).forEach((match) => {
           console.log(`  - https://bitjita.com${match}`);
         });
       }

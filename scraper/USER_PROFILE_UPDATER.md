@@ -117,10 +117,12 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ### Update Intervals
 
 **Automatic Updates** (in `scraper.js`):
+
 - Profile update interval: 30 minutes
 - Stale profile threshold: 24 hours
 
 **Manual Updates**:
+
 - Configurable via command line arguments
 - Default stale threshold: 24 hours
 
@@ -216,15 +218,18 @@ The updater works seamlessly with the signup process:
 ### Common Issues
 
 **"Player not found in Bitjita API"**
+
 - Player may have changed their username
 - Player may not exist in the game
 - API may be temporarily unavailable
 
 **"No changes needed"**
+
 - Profile is already up to date
 - Normal behavior for stable players
 
 **"CORS errors in development"**
+
 - Ensure the main app server is running for proxy functionality
 - Direct API calls will work in production
 

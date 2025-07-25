@@ -632,7 +632,9 @@ export function CraftingOrders() {
                     ) : order.claimed_by_profile ? (
                       <Group gap="xs">
                         <Text>{formatUserName(order.claimed_by_profile)}</Text>
-                        {userProfile && order.claimed_by === userProfile.id && (
+                        {userProfile && 
+                         order.claimed_by === userProfile.id && 
+                         order.status !== 'completed' && (
                           <Button
                             size="xs"
                             variant="subtle"
