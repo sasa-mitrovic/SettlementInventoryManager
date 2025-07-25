@@ -14,15 +14,34 @@ import {
   Anchor,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { useCallback } from 'react';
 import { IconCheck, IconMail } from '@tabler/icons-react';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { useUser } from '../supabase/loader';
 import { Navigate, Link } from 'react-router-dom';
+import { PlayerSearchSelect } from '../components/PlayerSearchSelect';
 
 export function Signup() {
   const [signupError, setSignupError] = useState<string | null>(null);
   const [signupSuccess, setSignupSuccess] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [usernameValidationResult, setUsernameValidationResult] = useState<{
+    available: boolean;
+    message: string;
+  } | null>(null);
+  const [selectedPlayerData, setSelectedPlayerData] = useState<{
+    entityId: string | null;
+    playerName: string | null;
+    empireName: string | null;
+    userId: string | null;
+    empireId: string | null;
+  }>({
+    entityId: null,
+    playerName: null,
+    empireName: null,
+    userId: null,
+    empireId: null,
+  });
 
   const form = useForm({
     initialValues: {
@@ -40,7 +59,7 @@ export function Signup() {
         value !== values.password ? 'Passwords do not match' : null,
       inGameName: (value) =>
         value.trim().length < 2
-          ? 'In Game Name must be at least 2 characters long'
+          ? 'You must select your in-game username from the search results'
           : null,
     },
   }); // redirect if logged in
@@ -51,6 +70,31 @@ export function Signup() {
 
   const handleSignup = async (values: typeof form.values) => {
     setSignupError(null);
+
+    // Check if username validation shows username is taken
+    if (usernameValidationResult && !usernameValidationResult.available) {
+      setSignupError(
+        'Cannot create account: Username is already taken. Please select a different username.',
+      );
+      return;
+    }
+
+    // Require that a player was actually selected from the search results
+    if (!selectedPlayerData.entityId || !selectedPlayerData.playerName) {
+      setSignupError(
+        'Please select your in-game username from the search results. Manual entry is not allowed.',
+      );
+      return;
+    }
+
+    // Ensure the selected player name matches the form input
+    if (selectedPlayerData.playerName !== values.inGameName) {
+      setSignupError(
+        'The selected username does not match the form input. Please select again from the search results.',
+      );
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -61,6 +105,9 @@ export function Signup() {
           emailRedirectTo: `${window.location.origin}/auth`,
           data: {
             in_game_name: values.inGameName,
+            empire: selectedPlayerData.empireName || null,
+            bitjita_user_id: selectedPlayerData.entityId,
+            bitjita_empire_id: selectedPlayerData.empireId,
           },
         },
       });
@@ -78,6 +125,9 @@ export function Signup() {
                   user_id: data.user.id,
                   user_email: values.email,
                   user_in_game_name: values.inGameName,
+                  user_empire: selectedPlayerData.empireName || null,
+                  user_bitjita_user_id: selectedPlayerData.entityId || null,
+                  user_bitjita_empire_id: selectedPlayerData.empireId || null,
                 });
 
               if (profileError) {
@@ -101,6 +151,29 @@ export function Signup() {
       setIsLoading(false);
     }
   };
+
+  const handlePlayerSelect = useCallback(
+    (
+      entityId: string | null,
+      playerName: string | null,
+      empireName: string | null,
+      userId: string | null,
+      empireId: string | null,
+    ) => {
+      setSelectedPlayerData({
+        entityId,
+        playerName,
+        empireName,
+        userId,
+        empireId,
+      });
+
+      if (playerName) {
+        form.setFieldValue('inGameName', playerName);
+      }
+    },
+    [form],
+  );
   if (signupSuccess) {
     return (
       <Box h="100vh" w="100vw">
@@ -149,11 +222,25 @@ export function Signup() {
                 required
                 {...form.getInputProps('email')}
               />
+              <PlayerSearchSelect
+                label="In-Game Username"
+                placeholder="Search for your in-game username..."
+                onChange={handlePlayerSelect}
+                onValidationResult={setUsernameValidationResult}
+                required
+                validateUsername={true}
+              />
               <TextInput
                 label="In Game Name"
-                placeholder="Your in-game name"
+                placeholder="Select your in-game username from search above"
                 required
                 mt="md"
+                disabled={true}
+                description={
+                  selectedPlayerData.playerName
+                    ? `Selected: ${selectedPlayerData.playerName}${selectedPlayerData.empireName ? ` (Empire: ${selectedPlayerData.empireName})` : ' (No Empire)'}`
+                    : 'You must select your username from the search results above'
+                }
                 {...form.getInputProps('inGameName')}
               />
               <PasswordInput
@@ -180,7 +267,13 @@ export function Signup() {
                 mt="xl"
                 type="submit"
                 loading={isLoading}
-                disabled={isLoading}
+                disabled={
+                  isLoading ||
+                  !selectedPlayerData.entityId ||
+                  !selectedPlayerData.playerName ||
+                  (usernameValidationResult !== null &&
+                    !usernameValidationResult.available)
+                }
               >
                 Sign Up
               </Button>
