@@ -177,7 +177,7 @@ class UnifiedItemService {
       console.log('[UnifiedItemService] Fetching items from proxy...');
 
       // Only use proxy endpoint - no direct API fallback
-      const proxyUrl = '/api/bitjita-proxy/items';
+      const proxyUrl = '/api/bitjita-proxy?endpoint=items';
 
       const response = await fetch(proxyUrl, {
         method: 'GET',
@@ -241,7 +241,7 @@ class UnifiedItemService {
       console.log('[UnifiedItemService] Fetching cargos from proxy...');
 
       // Only use proxy endpoint - no direct API fallback
-      const proxyUrl = '/api/bitjita-proxy/cargo';
+      const proxyUrl = '/api/bitjita-proxy?endpoint=cargo';
 
       const response = await fetch(proxyUrl, {
         method: 'GET',
