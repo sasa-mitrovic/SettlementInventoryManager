@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSettlement } from '../contexts/SettlementContext';
+import { useSettlement } from '../contexts/SettlementContext_simple';
 import { supabaseClient } from '../supabase/supabaseClient';
 
 export interface SettlementCraftingOrderCounts {

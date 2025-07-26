@@ -21,7 +21,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { DarkModeToggle } from '../../components/DarkModeToggle';
 import { ImpersonationBanner } from '../../components/ImpersonationBanner';
 import { SettlementSideNav } from '../../components/SettlementSideNav';
-import { SettlementProvider } from '../../contexts/SettlementContext';
+import { SettlementProvider } from '../../contexts/SettlementContext_simple';
 import { useOptimizedUserWithProfile } from '../../supabase/loader';
 import { useHasPermission } from '../../supabase/optimizedRoleHooks';
 import { supabaseClient } from '../../supabase/supabaseClient';

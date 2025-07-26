@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button, Group, Text, Alert, Progress } from '@mantine/core';
 import { IconRefresh, IconAlertTriangle, IconCheck } from '@tabler/icons-react';
-import { useSettlement } from '../contexts/SettlementContext';
+import { useSettlement } from '../contexts/SettlementContext_simple';
 import { useUser } from '../supabase/loader';
 import { settlementInventoryService } from '../services/settlementInventoryService';
 
@@ -35,7 +35,7 @@ export function ScrapeControls({ onScrapeComplete }: ScrapeControlsProps) {
   useEffect(() => {
     if (scrapeStatus && scrapeStatus.cooldownRemaining > 0) {
       const timer = setInterval(() => {
-        setScrapeStatus(prev => {
+        setScrapeStatus((prev) => {
           if (!prev || prev.cooldownRemaining <= 1000) {
             // Cooldown finished, reload status
             loadScrapeStatus();
@@ -58,7 +58,7 @@ export function ScrapeControls({ onScrapeComplete }: ScrapeControlsProps) {
     try {
       const status = await settlementInventoryService.getScrapeStatus(
         currentSettlement.entityId,
-        user.id
+        user.id,
       );
       setScrapeStatus(status);
     } catch (error) {
@@ -82,7 +82,7 @@ export function ScrapeControls({ onScrapeComplete }: ScrapeControlsProps) {
       const scrapeResult = await settlementInventoryService.triggerScrape(
         currentSettlement.entityId,
         user.id,
-        force
+        force,
       );
 
       setResult(scrapeResult);
@@ -96,7 +96,9 @@ export function ScrapeControls({ onScrapeComplete }: ScrapeControlsProps) {
     } catch (error) {
       setResult({
         success: false,
-        message: 'Failed to scrape: ' + (error instanceof Error ? error.message : 'Unknown error'),
+        message:
+          'Failed to scrape: ' +
+          (error instanceof Error ? error.message : 'Unknown error'),
       });
     } finally {
       setScraping(false);
@@ -107,7 +109,7 @@ export function ScrapeControls({ onScrapeComplete }: ScrapeControlsProps) {
     const seconds = Math.ceil(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    
+
     if (minutes > 0) {
       return `${minutes}m ${remainingSeconds}s`;
     }
@@ -117,7 +119,8 @@ export function ScrapeControls({ onScrapeComplete }: ScrapeControlsProps) {
   if (!currentSettlement?.entityId) {
     return (
       <Alert icon={<IconAlertTriangle size={16} />} color="yellow">
-        No settlement selected. Please select a settlement to scrape inventory data.
+        No settlement selected. Please select a settlement to scrape inventory
+        data.
       </Alert>
     );
   }
@@ -161,12 +164,7 @@ export function ScrapeControls({ onScrapeComplete }: ScrapeControlsProps) {
 
       {scraping && (
         <div>
-          <Progress
-            value={100}
-            animated
-            size="sm"
-            mb="sm"
-          />
+          <Progress value={100} animated size="sm" mb="sm" />
           <Text size="sm" c="dimmed" ta="center">
             Fetching latest inventory data from Bitjita...
           </Text>
@@ -175,7 +173,13 @@ export function ScrapeControls({ onScrapeComplete }: ScrapeControlsProps) {
 
       {result && (
         <Alert
-          icon={result.success ? <IconCheck size={16} /> : <IconAlertTriangle size={16} />}
+          icon={
+            result.success ? (
+              <IconCheck size={16} />
+            ) : (
+              <IconAlertTriangle size={16} />
+            )
+          }
           color={result.success ? 'green' : 'red'}
           mb="sm"
         >

@@ -186,14 +186,19 @@ class UnifiedItemService {
         },
       });
 
-      console.log('[UnifiedItemService] Proxy response status:', response.status);
+      console.log(
+        '[UnifiedItemService] Proxy response status:',
+        response.status,
+      );
 
       if (!response.ok) {
-        throw new Error(`Items proxy responded with status: ${response.status}`);
+        throw new Error(
+          `Items proxy responded with status: ${response.status}`,
+        );
       }
 
       const data = await response.json();
-      
+
       // Handle new API format that wraps items in an object
       let itemsArray;
       if (Array.isArray(data)) {
@@ -202,12 +207,18 @@ class UnifiedItemService {
       } else if (data && Array.isArray(data.items)) {
         // New format: { items: [...], metrics: {...} }
         itemsArray = data.items;
-        console.log('[UnifiedItemService] Using new API format with metrics:', data.metrics);
+        console.log(
+          '[UnifiedItemService] Using new API format with metrics:',
+          data.metrics,
+        );
       } else {
-        console.error('[UnifiedItemService] Items API returned unexpected format:', data);
+        console.error(
+          '[UnifiedItemService] Items API returned unexpected format:',
+          data,
+        );
         throw new Error('Items API returned invalid data format');
       }
-      
+
       console.log('[UnifiedItemService] Fetched items:', itemsArray.length);
       return itemsArray;
     } catch (error) {
@@ -215,12 +226,12 @@ class UnifiedItemService {
         '[UnifiedItemService] Failed to fetch items from proxy:',
         error,
       );
-      
+
       // Try to get more details about what went wrong
       if (error instanceof Error) {
         console.error('[UnifiedItemService] Error details:', error.message);
       }
-      
+
       return [];
     }
   }
@@ -239,14 +250,19 @@ class UnifiedItemService {
         },
       });
 
-      console.log('[UnifiedItemService] Cargo proxy response status:', response.status);
+      console.log(
+        '[UnifiedItemService] Cargo proxy response status:',
+        response.status,
+      );
 
       if (!response.ok) {
-        throw new Error(`Cargo proxy responded with status: ${response.status}`);
+        throw new Error(
+          `Cargo proxy responded with status: ${response.status}`,
+        );
       }
 
       const data = await response.json();
-      
+
       // Handle new API format that wraps cargo in an object (similar to items)
       let cargoArray;
       if (Array.isArray(data)) {
@@ -255,16 +271,22 @@ class UnifiedItemService {
       } else if (data && Array.isArray(data.cargo)) {
         // New format: { cargo: [...], metrics: {...} }
         cargoArray = data.cargo;
-        console.log('[UnifiedItemService] Using new cargo API format with metrics:', data.metrics);
+        console.log(
+          '[UnifiedItemService] Using new cargo API format with metrics:',
+          data.metrics,
+        );
       } else if (data && Array.isArray(data.items)) {
         // Alternative format where cargo might be under 'items'
         cargoArray = data.items;
         console.log('[UnifiedItemService] Using alternative cargo API format');
       } else {
-        console.error('[UnifiedItemService] Cargo API returned unexpected format:', data);
+        console.error(
+          '[UnifiedItemService] Cargo API returned unexpected format:',
+          data,
+        );
         throw new Error('Cargo API returned invalid data format');
       }
-      
+
       console.log('[UnifiedItemService] Fetched cargos:', cargoArray.length);
       return cargoArray;
     } catch (error) {
@@ -367,14 +389,14 @@ class UnifiedItemService {
       });
     } catch (error) {
       console.error('[UnifiedItemService] Error during fetch:', error);
-      
+
       // Log more details about the error
       if (error instanceof Error) {
         console.error('[UnifiedItemService] Error name:', error.name);
         console.error('[UnifiedItemService] Error message:', error.message);
         console.error('[UnifiedItemService] Error stack:', error.stack);
       }
-      
+
       notifications.show({
         title: 'Error',
         message: 'Failed to fetch items and cargos from Bitjita API',

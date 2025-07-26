@@ -33,7 +33,7 @@ import { Link } from 'react-router-dom';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
 import { useUnifiedItems, UnifiedItem } from '../services/unifiedItemService';
-import { useSettlement } from '../contexts/SettlementContext';
+import { useSettlement } from '../contexts/SettlementContext_simple';
 import {
   useSettlementCraftingOrders,
   SettlementCraftingOrder,
@@ -361,9 +361,11 @@ export function CraftingOrders() {
     if (!userProfile) return;
 
     // Find the selected item using the new unique value format
-    const selectedOption = itemSelectData.find(option => option.value === values.item_id);
+    const selectedOption = itemSelectData.find(
+      (option) => option.value === values.item_id,
+    );
     const selectedItem = selectedOption?.item;
-    
+
     if (!selectedItem) {
       notifications.show({
         title: 'Error',
@@ -461,13 +463,16 @@ export function CraftingOrders() {
     }
 
     // Remove duplicates by ID to avoid Mantine Select error
-    const uniqueItems = selectItems.reduce((acc: UnifiedItem[], current: UnifiedItem) => {
-      const existingItem = acc.find(item => item.id === current.id);
-      if (!existingItem) {
-        acc.push(current);
-      }
-      return acc;
-    }, []);
+    const uniqueItems = selectItems.reduce(
+      (acc: UnifiedItem[], current: UnifiedItem) => {
+        const existingItem = acc.find((item) => item.id === current.id);
+        if (!existingItem) {
+          acc.push(current);
+        }
+        return acc;
+      },
+      [],
+    );
 
     return uniqueItems.map((item: UnifiedItem, index: number) => ({
       value: `${item.id}_${item.type}_${index}`, // Make value unique by combining id, type, and index
