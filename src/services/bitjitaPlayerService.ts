@@ -87,27 +87,67 @@ class BitjitaPlayerService {
     const url = `${this.BASE_URL}${endpoint}`;
 
     try {
-      // Use CORS proxy directly to avoid browser console errors
-      const proxyUrl = `${this.CORS_PROXY}${encodeURIComponent(url)}`;
-      const proxyResponse = await fetch(proxyUrl);
+      console.log('🌐 Making API request to:', url);
 
-      if (!proxyResponse.ok) {
-        throw new Error(
-          `Proxy request failed with status: ${proxyResponse.status}`,
+      // First try Vite proxy (for local development)
+      try {
+        const proxyUrl = `/api/bitjita-proxy${endpoint}`;
+        console.log('🔄 Trying Vite proxy:', proxyUrl);
+        const proxyResponse = await fetch(proxyUrl);
+        if (proxyResponse.ok) {
+          console.log('✅ Vite proxy request successful');
+          return await proxyResponse.json();
+        }
+        console.log('⚠️ Vite proxy failed, trying direct request...');
+      } catch (viteProxyError) {
+        console.log(
+          '⚠️ Vite proxy error:',
+          viteProxyError instanceof Error
+            ? viteProxyError.message
+            : 'Unknown proxy error',
         );
       }
 
-      const proxyData = await proxyResponse.json();
+      // Try direct request second (in case CORS is resolved)
+      try {
+        const directResponse = await fetch(url);
+        if (directResponse.ok) {
+          console.log('✅ Direct API request successful');
+          return await directResponse.json();
+        }
+        console.log('⚠️ Direct request failed, trying AllOrigins proxy...');
+      } catch (corsError) {
+        console.log(
+          '⚠️ CORS error, using AllOrigins proxy:',
+          corsError instanceof Error ? corsError.message : 'Unknown CORS error',
+        );
+      }
 
-      if (proxyData.status && proxyData.status.http_code === 200) {
-        return JSON.parse(proxyData.contents);
-      } else {
+      // Use AllOrigins CORS proxy as final fallback
+      const allOriginsUrl = `${this.CORS_PROXY}${encodeURIComponent(url)}`;
+      console.log('🔄 Using AllOrigins proxy URL:', allOriginsUrl);
+
+      const allOriginsResponse = await fetch(allOriginsUrl);
+
+      if (!allOriginsResponse.ok) {
         throw new Error(
-          `API request failed: ${proxyData.status?.http_code || 'Unknown error'}`,
+          `AllOrigins proxy request failed with status: ${allOriginsResponse.status}`,
+        );
+      }
+
+      const allOriginsData = await allOriginsResponse.json();
+
+      if (allOriginsData.status && allOriginsData.status.http_code === 200) {
+        console.log('✅ AllOrigins proxy request successful');
+        return JSON.parse(allOriginsData.contents);
+      } else {
+        console.error('❌ API returned error:', allOriginsData.status);
+        throw new Error(
+          `API request failed: ${allOriginsData.status?.http_code || 'Unknown error'}`,
         );
       }
     } catch (error) {
-      console.error('CORS proxy request failed:', error);
+      console.error('❌ API request failed:', error);
       throw new Error(
         'Unable to connect to Bitjita API. Please check your connection or try again later.',
       );

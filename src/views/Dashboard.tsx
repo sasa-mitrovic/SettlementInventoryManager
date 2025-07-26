@@ -8,23 +8,30 @@ import {
   Title,
   Button,
   Group,
+  Badge,
+  Alert,
 } from '@mantine/core';
 import {
   IconUsers,
   IconPackage,
   IconHammer,
   IconSettings,
+  IconMapPin,
+  IconInfoCircle,
 } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
+import { useSettlement } from '../contexts/SettlementContext';
+import { getPermissionLevel, getPermissionColor } from '../types/settlement';
 import { PermissionGate } from '../components/PermissionGate';
-import { useCraftingOrderCounts } from '../hooks/useCraftingOrderCounts';
+import { useSettlementCraftingOrderCounts } from '../hooks/useSettlementCraftingOrderCounts';
 
 export function Dashboard() {
   const { userProfile, loading } = useOptimizedUserWithProfile();
-  const { counts, loading: countsLoading } = useCraftingOrderCounts();
+  const { currentSettlement, isLoading: settlementLoading } = useSettlement();
+  const { counts, loading: countsLoading } = useSettlementCraftingOrderCounts();
 
-  if (loading) {
+  if (loading || settlementLoading) {
     return (
       <Container size="lg" py="xl">
         <Text>Loading...</Text>
@@ -32,19 +39,88 @@ export function Dashboard() {
     );
   }
 
+  if (!currentSettlement) {
+    return (
+      <Container size="lg" py="xl">
+        <Alert
+          icon={<IconInfoCircle size={16} />}
+          color="yellow"
+          variant="light"
+        >
+          <Title order={3}>No Settlement Selected</Title>
+          <Text mt="sm">
+            You don't have access to any settlements or no settlement is
+            currently selected. Please check your settlement permissions or
+            contact an administrator.
+          </Text>
+        </Alert>
+      </Container>
+    );
+  }
+
+  const permissionLevel = getPermissionLevel(currentSettlement);
+  const permissionColor = getPermissionColor(permissionLevel);
+
   return (
     <Container size="lg" py="xl">
       <Stack gap="xl">
         <Box>
-          <Title order={1} mb="md">
-            Gloomhaven Dashboard
-          </Title>
-          <Text c="dimmed" size="lg">
-            Welcome back, {userProfile?.in_game_name || userProfile?.email}
-          </Text>
-          <Text c="dimmed" size="sm">
-            Role: {userProfile?.role?.name || 'No role assigned'}
-          </Text>
+          <Group justify="space-between" align="flex-start" mb="md">
+            <Box>
+              <Group gap="sm" mb="xs">
+                <IconMapPin size={24} />
+                <Title order={1}>{currentSettlement.name} Dashboard</Title>
+                <Badge color={permissionColor} variant="light">
+                  {permissionLevel}
+                </Badge>
+              </Group>
+              <Text c="dimmed" size="lg">
+                Welcome back, {userProfile?.in_game_name || userProfile?.email}
+              </Text>
+              <Text c="dimmed" size="sm">
+                Role: {userProfile?.role?.name || 'No role assigned'}
+              </Text>
+            </Box>
+          </Group>
+
+          {/* Settlement Info */}
+          <Paper withBorder shadow="sm" radius="md" p="md" mb="xl">
+            <Group justify="space-between">
+              <Group>
+                <Box>
+                  <Text size="sm" c="dimmed">
+                    Settlement
+                  </Text>
+                  <Text fw={500}>{currentSettlement.name}</Text>
+                </Box>
+                <Box>
+                  <Text size="sm" c="dimmed">
+                    Region
+                  </Text>
+                  <Text fw={500}>{currentSettlement.regionName}</Text>
+                </Box>
+                <Box>
+                  <Text size="sm" c="dimmed">
+                    Supplies
+                  </Text>
+                  <Text fw={500}>
+                    {currentSettlement.supplies.toLocaleString()}
+                  </Text>
+                </Box>
+                <Box>
+                  <Text size="sm" c="dimmed">
+                    Treasury
+                  </Text>
+                  <Text fw={500}>
+                    {parseInt(currentSettlement.treasury).toLocaleString()} HC
+                  </Text>
+                </Box>
+              </Group>
+              <Text size="sm" c="dimmed">
+                Settlement ID: {currentSettlement.entityId}
+              </Text>
+            </Group>
+          </Paper>
         </Box>
 
         <Grid>
@@ -129,16 +205,22 @@ export function Dashboard() {
                 {!countsLoading && (
                   <Group gap="md">
                     <Text size="sm" c="dimmed">
-                      <Text component="span" fw={600} c="red">
-                        {counts.unassigned_count}
+                      <Text component="span" fw={600} c="orange">
+                        {counts.open}
                       </Text>{' '}
-                      Unassigned
+                      Open
                     </Text>
                     <Text size="sm" c="dimmed">
-                      <Text component="span" fw={600} c="yellow">
-                        {counts.assigned_count}
+                      <Text component="span" fw={600} c="blue">
+                        {counts.in_progress}
                       </Text>{' '}
-                      Assigned
+                      In Progress
+                    </Text>
+                    <Text size="sm" c="dimmed">
+                      <Text component="span" fw={600} c="green">
+                        {counts.completed}
+                      </Text>{' '}
+                      Completed
                     </Text>
                   </Group>
                 )}
@@ -199,17 +281,6 @@ export function Dashboard() {
             </Paper>
           </Grid.Col>
         </Grid>
-
-        <Paper withBorder shadow="sm" radius="md" p="md">
-          <Group justify="space-between">
-            <Text size="sm" c="dimmed">
-              Settlement ID: 144115188105096768
-            </Text>
-            <Text size="sm" c="dimmed">
-              Last updated: {new Date().toLocaleString()}
-            </Text>
-          </Group>
-        </Paper>
       </Stack>
     </Container>
   );

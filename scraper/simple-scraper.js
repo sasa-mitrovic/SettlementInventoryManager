@@ -251,23 +251,24 @@ class BitjitaScraper {
         return;
       }
 
-      // Clear existing inventory data
+      // Clear existing inventory data for this settlement
       const { error: deleteError } = await supabase
         .from('settlement_inventory')
         .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+        .eq('settlement_id', this.settlementId);
 
       if (deleteError) {
         console.error('Error clearing inventory:', deleteError);
         return;
       }
 
-      // Insert new inventory data
+      // Insert new inventory data with settlement_id
       const { error: insertError } = await supabase
         .from('settlement_inventory')
         .insert(
           items.map((item) => ({
             ...item,
+            settlement_id: this.settlementId,
             updated_at: new Date().toISOString(),
           })),
         );
@@ -409,5 +410,6 @@ class BitjitaScraper {
 }
 
 // Start the scraper
-const scraper = new BitjitaScraper();
+const defaultSettlementId = process.env.SETTLEMENT_ID || '144115188105096768'; // Default to Gloomhaven
+const scraper = new BitjitaScraper(defaultSettlementId);
 scraper.startPeriodicUpdates(1); // Update every minute

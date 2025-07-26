@@ -8,6 +8,7 @@ interface UsePlayerSearchOptions {
   debounceMs?: number;
   maxResults?: number;
   minSearchLength?: number;
+  errorGracePeriodMs?: number;
 }
 
 interface UsePlayerSearchReturn {
@@ -25,6 +26,7 @@ export function usePlayerSearch({
   debounceMs = 300,
   maxResults = 5,
   minSearchLength = 3,
+  errorGracePeriodMs = 2000, // Show errors only after 2 seconds
 }: UsePlayerSearchOptions = {}): UsePlayerSearchReturn {
   const [players, setPlayers] = useState<BitjitaPlayer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,40 +36,73 @@ export function usePlayerSearch({
     useState<BitjitaPlayerDetails | null>(null);
 
   const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playerService = BitjitaPlayerService.getInstance();
+
+  // Helper function to set error with grace period
+  const setErrorWithGracePeriod = useCallback(
+    (errorMessage: string) => {
+      // Clear any existing error timeout
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
+
+      // Set error after grace period
+      errorTimeoutRef.current = setTimeout(() => {
+        setError(errorMessage);
+      }, errorGracePeriodMs);
+    },
+    [errorGracePeriodMs],
+  );
+
+  // Helper function to clear error immediately
+  const clearErrorImmediate = useCallback(() => {
+    // Clear timeout if it exists
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = null;
+    }
+    setError(null);
+  }, []);
 
   // Debounced search function
   const debouncedSearch = useCallback(
     async (query: string) => {
       if (!query.trim()) {
         setPlayers([]);
-        setError(null);
+        clearErrorImmediate();
         return;
       }
 
       // Check minimum search length
       if (query.trim().length < minSearchLength) {
         setPlayers([]);
-        setError(null);
+        clearErrorImmediate();
         return;
       }
 
       setLoading(true);
-      setError(null);
+      clearErrorImmediate();
 
       try {
         const results = await playerService.searchPlayers(query, maxResults);
         setPlayers(results.players);
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Failed to search players',
-        );
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to search players';
+        setErrorWithGracePeriod(errorMessage);
         setPlayers([]);
       } finally {
         setLoading(false);
       }
     },
-    [maxResults, playerService, minSearchLength],
+    [
+      maxResults,
+      playerService,
+      minSearchLength,
+      setErrorWithGracePeriod,
+      clearErrorImmediate,
+    ],
   );
 
   // Handle search value changes with debouncing
@@ -87,6 +122,9 @@ export function usePlayerSearch({
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current);
       }
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
     };
   }, [searchValue, debouncedSearch, debounceMs]);
 
@@ -94,21 +132,21 @@ export function usePlayerSearch({
   const selectPlayerById = useCallback(
     async (entityId: string) => {
       setLoading(true);
-      setError(null);
+      clearErrorImmediate();
 
       try {
         const playerDetails = await playerService.getPlayerDetails(entityId);
         setSelectedPlayer(playerDetails);
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Failed to fetch player details',
-        );
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to fetch player details';
+        setErrorWithGracePeriod(errorMessage);
         setSelectedPlayer(null);
       } finally {
         setLoading(false);
       }
     },
-    [playerService],
+    [playerService, setErrorWithGracePeriod, clearErrorImmediate],
   );
 
   return {
