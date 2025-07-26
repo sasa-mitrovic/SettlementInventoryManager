@@ -42,8 +42,12 @@ export function SettlementProvider({ children }: SettlementProviderProps) {
     console.log('🌐 Fetching player data from:', playerUrl);
 
     const response = await fetch(playerUrl);
+    console.log('🌐 Fetch response status:', response.status, response.statusText);
+    
     if (!response.ok) {
-      throw new Error(`Failed to fetch player data: ${response.status}`);
+      const errorText = await response.text();
+      console.error('🌐 Fetch error details:', errorText);
+      throw new Error(`Failed to fetch player data: ${response.status} ${response.statusText}. Error: ${errorText}`);
     }
 
     const playerData: any = await response.json();
