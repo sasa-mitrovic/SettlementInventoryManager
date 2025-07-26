@@ -20,66 +20,147 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 class DynamicSettlementScraper {
   constructor() {
     this.baseUrl = 'https://bitjita.com';
-    this.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+    this.userAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
   }
 
   // Get settlements for a specific user/player
   async getUserSettlements(userId) {
     try {
       console.log(`[DynamicScraper] Getting settlements for user: ${userId}`);
-      
-      // This would need to be implemented based on how you get user's settlements
-      // For now, return a placeholder that shows the concept
-      return [
-        { 
-          id: '144115188105096768', 
-          name: 'Gloomhaven',
-          role: 'member',
-          isSelected: true 
-        }
-        // Add more settlements as user has access to them
-      ];
+
+      // Get user profile from database to find their bitjita_user_id
+      const { data: userProfile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('bitjita_user_id, in_game_name')
+        .eq('id', userId)
+        .single();
+
+      if (profileError || !userProfile) {
+        console.error(
+          `[DynamicScraper] Failed to get user profile for ${userId}:`,
+          profileError,
+        );
+        return [];
+      }
+
+      if (!userProfile.bitjita_user_id) {
+        console.log(
+          `[DynamicScraper] No bitjita_user_id found for user ${userId} (${userProfile.in_game_name})`,
+        );
+        return [];
+      }
+
+      // Fetch player details from Bitjita API to get their settlements/claims
+      const playerDetailsUrl = `${this.baseUrl}/api/players/${userProfile.bitjita_user_id}`;
+
+      console.log(
+        `[DynamicScraper] Fetching player details from: ${playerDetailsUrl}`,
+      );
+
+      const response = await fetch(playerDetailsUrl, {
+        headers: {
+          'User-Agent': this.userAgent,
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        console.error(
+          `[DynamicScraper] Failed to fetch player details: ${response.status} ${response.statusText}`,
+        );
+        return [];
+      }
+
+      const playerData = await response.json();
+
+      // Extract settlements from the player data
+      if (playerData.claims && playerData.claims.length > 0) {
+        const settlements = playerData.claims.map((claim, index) => ({
+          id: claim.entityId,
+          name: claim.name,
+          role: this.determineUserRole(claim, userProfile.bitjita_user_id),
+          isSelected: index === 0, // First settlement is selected by default
+          ...claim, // Include all claim data
+        }));
+
+        console.log(
+          `[DynamicScraper] Found ${settlements.length} settlements for user ${userProfile.in_game_name}`,
+        );
+        return settlements;
+      } else {
+        console.log(
+          `[DynamicScraper] No settlements found for user ${userProfile.in_game_name}`,
+        );
+        return [];
+      }
     } catch (error) {
       console.error('[DynamicScraper] Error getting user settlements:', error);
       return [];
     }
   }
 
+  // Helper method to determine the user's role in a settlement
+  determineUserRole(claim, bitjitaUserId) {
+    // This would need to be implemented based on the claim structure
+    // For now, return a default role
+    if (claim.isOwner) return 'owner';
+    if (claim.memberPermissions?.coOwnerPermission === 1) return 'co-owner';
+    if (claim.memberPermissions?.officerPermission === 1) return 'officer';
+    return 'member';
+  }
+
   // Scrape inventory for a specific settlement
   async scrapeSettlementInventory(settlementId, userId = null) {
     try {
-      console.log(`[DynamicScraper] Scraping inventory for settlement: ${settlementId}`);
-      
+      console.log(
+        `[DynamicScraper] Scraping inventory for settlement: ${settlementId}`,
+      );
+
       const settlementUrl = `${this.baseUrl}/claims/${settlementId}`;
       const inventoryApiUrl = `${this.baseUrl}/api/claims/${settlementId}/inventories`;
-      
+
       console.log(`[DynamicScraper] Fetching from: ${inventoryApiUrl}`);
-      
+
       const response = await fetch(inventoryApiUrl, {
         headers: {
           'User-Agent': this.userAgent,
-          'Accept': 'application/json',
+          Accept: 'application/json',
           'Content-Type': 'application/json',
         },
       });
 
       if (!response.ok) {
-        console.warn(`[DynamicScraper] API failed (${response.status}), falling back to HTML parsing`);
+        console.warn(
+          `[DynamicScraper] API failed (${response.status}), falling back to HTML parsing`,
+        );
         return await this.scrapeInventoryFromHTML(settlementId);
       }
 
       const apiData = await response.json();
-      console.log(`[DynamicScraper] Successfully fetched API data for settlement ${settlementId}`);
-      
+      console.log(
+        `[DynamicScraper] Successfully fetched API data for settlement ${settlementId}`,
+      );
+
       // Process the API data (similar to existing logic but with dynamic settlement ID)
-      const inventoryItems = await this.processInventoryData(apiData, settlementId);
-      
+      const inventoryItems = await this.processInventoryData(
+        apiData,
+        settlementId,
+      );
+
       // Update database with settlement-specific data
-      await this.updateSettlementInventory(settlementId, inventoryItems, userId);
-      
+      await this.updateSettlementInventory(
+        settlementId,
+        inventoryItems,
+        userId,
+      );
+
       return inventoryItems;
     } catch (error) {
-      console.error(`[DynamicScraper] Error scraping settlement ${settlementId}:`, error);
+      console.error(
+        `[DynamicScraper] Error scraping settlement ${settlementId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -87,11 +168,13 @@ class DynamicSettlementScraper {
   // Fallback HTML parsing for specific settlement
   async scrapeInventoryFromHTML(settlementId) {
     try {
-      console.log(`[DynamicScraper] HTML fallback for settlement: ${settlementId}`);
-      
+      console.log(
+        `[DynamicScraper] HTML fallback for settlement: ${settlementId}`,
+      );
+
       const settlementUrl = `${this.baseUrl}/claims/${settlementId}`;
       const response = await fetch(settlementUrl, {
-        headers: { 'User-Agent': this.userAgent }
+        headers: { 'User-Agent': this.userAgent },
       });
 
       if (!response.ok) {
@@ -100,15 +183,20 @@ class DynamicSettlementScraper {
 
       const html = await response.text();
       const settlementData = await this.parseDataFromScripts(html);
-      
+
       if (!settlementData || !settlementData.buildings) {
-        console.log(`[DynamicScraper] No building data found for settlement ${settlementId}`);
+        console.log(
+          `[DynamicScraper] No building data found for settlement ${settlementId}`,
+        );
         return [];
       }
 
       return await this.processHTMLInventoryData(settlementData, settlementId);
     } catch (error) {
-      console.error(`[DynamicScraper] HTML parsing failed for settlement ${settlementId}:`, error);
+      console.error(
+        `[DynamicScraper] HTML parsing failed for settlement ${settlementId}:`,
+        error,
+      );
       return [];
     }
   }
@@ -116,13 +204,17 @@ class DynamicSettlementScraper {
   // Process HTML inventory data for a specific settlement (missing method implementation)
   async processHTMLInventoryData(settlementData, settlementId) {
     const inventoryItems = [];
-    
+
     if (!settlementData || !settlementData.buildings) {
-      console.log(`[DynamicScraper] No buildings data in HTML response for settlement ${settlementId}`);
+      console.log(
+        `[DynamicScraper] No buildings data in HTML response for settlement ${settlementId}`,
+      );
       return inventoryItems;
     }
 
-    console.log(`[DynamicScraper] Processing ${settlementData.buildings.length} buildings from HTML for settlement ${settlementId}`);
+    console.log(
+      `[DynamicScraper] Processing ${settlementData.buildings.length} buildings from HTML for settlement ${settlementId}`,
+    );
 
     // Create lookup maps for items and cargos
     const itemMap = new Map();
@@ -186,17 +278,32 @@ class DynamicSettlementScraper {
             inventoryItems.push({
               id: `${settlementId}-${building.entityId || building.id || buildingIndex}-${slotIndex}`,
               building_id: building.entityId || building.id || buildingIndex,
-              building_name: building.buildingName || building.name || `Building ${buildingIndex}`,
-              building_nickname: building.buildingNickname || building.nickname || null,
-              building_type: building.buildingDescriptionId || building.type || 0,
+              building_name:
+                building.buildingName ||
+                building.name ||
+                `Building ${buildingIndex}`,
+              building_nickname:
+                building.buildingNickname || building.nickname || null,
+              building_type:
+                building.buildingDescriptionId || building.type || 0,
               item_id: itemId,
-              item_name: itemDetails ? itemDetails.name : slot.contents.name || slot.contents.item_name || `Unknown Item (${itemId || 'N/A'})`,
+              item_name: itemDetails
+                ? itemDetails.name
+                : slot.contents.name ||
+                  slot.contents.item_name ||
+                  `Unknown Item (${itemId || 'N/A'})`,
               item_type: itemType,
               quantity: quantity,
               tier: itemDetails ? itemDetails.tier : slot.contents.tier || null,
               rarity: rarity, // Use safely converted rarity
-              icon: itemDetails ? itemDetails.iconAssetName : slot.contents.icon || slot.contents.iconAssetName || null,
-              location: building.buildingNickname || building.buildingName || building.name || 'Unknown Container',
+              icon: itemDetails
+                ? itemDetails.iconAssetName
+                : slot.contents.icon || slot.contents.iconAssetName || null,
+              location:
+                building.buildingNickname ||
+                building.buildingName ||
+                building.name ||
+                'Unknown Container',
               slot_index: slotIndex,
               settlement_id: settlementId, // Dynamic settlement ID
               timestamp: new Date().toISOString(),
@@ -206,20 +313,26 @@ class DynamicSettlementScraper {
       }
     });
 
-    console.log(`[DynamicScraper] Processed ${inventoryItems.length} HTML items for settlement ${settlementId}`);
+    console.log(
+      `[DynamicScraper] Processed ${inventoryItems.length} HTML items for settlement ${settlementId}`,
+    );
     return inventoryItems;
   }
 
   // Process API inventory data for a specific settlement
   async processInventoryData(apiData, settlementId) {
     const inventoryItems = [];
-    
+
     if (!apiData || !apiData.buildings) {
-      console.log(`[DynamicScraper] No buildings data in API response for settlement ${settlementId}`);
+      console.log(
+        `[DynamicScraper] No buildings data in API response for settlement ${settlementId}`,
+      );
       return inventoryItems;
     }
 
-    console.log(`[DynamicScraper] Processing ${apiData.buildings.length} buildings for settlement ${settlementId}`);
+    console.log(
+      `[DynamicScraper] Processing ${apiData.buildings.length} buildings for settlement ${settlementId}`,
+    );
 
     // Get item/cargo lookup data for this settlement
     const lookupData = await this.getItemLookupData(settlementId);
@@ -249,17 +362,32 @@ class DynamicSettlementScraper {
             inventoryItems.push({
               id: `${settlementId}-${building.entityId || building.id || buildingIndex}-${slotIndex}`,
               building_id: building.entityId || building.id || buildingIndex,
-              building_name: building.buildingName || building.name || `Building ${buildingIndex}`,
-              building_nickname: building.buildingNickname || building.nickname || null,
-              building_type: building.buildingDescriptionId || building.type || 0,
+              building_name:
+                building.buildingName ||
+                building.name ||
+                `Building ${buildingIndex}`,
+              building_nickname:
+                building.buildingNickname || building.nickname || null,
+              building_type:
+                building.buildingDescriptionId || building.type || 0,
               item_id: itemId,
-              item_name: itemDetails ? itemDetails.name : item.name || item.item_name || `Unknown Item (${itemId || 'N/A'})`,
+              item_name: itemDetails
+                ? itemDetails.name
+                : item.name ||
+                  item.item_name ||
+                  `Unknown Item (${itemId || 'N/A'})`,
               item_type: itemType,
               quantity: quantity,
               tier: itemDetails ? itemDetails.tier : item.tier || null,
               rarity: rarity, // Use safely converted rarity
-              icon: itemDetails ? itemDetails.iconAssetName : item.icon || item.iconAssetName || null,
-              location: building.buildingNickname || building.buildingName || building.name || 'Unknown Container',
+              icon: itemDetails
+                ? itemDetails.iconAssetName
+                : item.icon || item.iconAssetName || null,
+              location:
+                building.buildingNickname ||
+                building.buildingName ||
+                building.name ||
+                'Unknown Container',
               slot_index: slotIndex,
               settlement_id: settlementId, // Dynamic settlement ID
               timestamp: new Date().toISOString(),
@@ -269,7 +397,9 @@ class DynamicSettlementScraper {
       }
     });
 
-    console.log(`[DynamicScraper] Processed ${inventoryItems.length} items for settlement ${settlementId}`);
+    console.log(
+      `[DynamicScraper] Processed ${inventoryItems.length} items for settlement ${settlementId}`,
+    );
     return inventoryItems;
   }
 
@@ -278,19 +408,21 @@ class DynamicSettlementScraper {
     try {
       const settlementUrl = `${this.baseUrl}/claims/${settlementId}`;
       const response = await fetch(settlementUrl, {
-        headers: { 'User-Agent': this.userAgent }
+        headers: { 'User-Agent': this.userAgent },
       });
 
       if (!response.ok) {
-        console.warn(`[DynamicScraper] Could not fetch lookup data for settlement ${settlementId}`);
+        console.warn(
+          `[DynamicScraper] Could not fetch lookup data for settlement ${settlementId}`,
+        );
         return new Map(); // Return empty map if we can't get lookup data
       }
 
       const html = await response.text();
       const settlementData = await this.parseDataFromScripts(html);
-      
+
       const lookupMap = new Map();
-      
+
       if (settlementData && settlementData.items) {
         settlementData.items.forEach((item) => {
           if (item.id && item.name) {
@@ -318,14 +450,19 @@ class DynamicSettlementScraper {
       }
 
       // Add a get method that handles both item types
-      lookupMap.get = function(itemId, itemType = 'item') {
+      lookupMap.get = function (itemId, itemType = 'item') {
         return Map.prototype.get.call(this, `${itemId}_${itemType}`) || null;
       };
 
-      console.log(`[DynamicScraper] Loaded ${lookupMap.size} lookup entries for settlement ${settlementId}`);
+      console.log(
+        `[DynamicScraper] Loaded ${lookupMap.size} lookup entries for settlement ${settlementId}`,
+      );
       return lookupMap;
     } catch (error) {
-      console.error(`[DynamicScraper] Error getting lookup data for settlement ${settlementId}:`, error);
+      console.error(
+        `[DynamicScraper] Error getting lookup data for settlement ${settlementId}:`,
+        error,
+      );
       return new Map();
     }
   }
@@ -334,7 +471,9 @@ class DynamicSettlementScraper {
   async updateSettlementInventory(settlementId, inventoryItems, userId = null) {
     try {
       if (inventoryItems.length === 0) {
-        console.log(`[DynamicScraper] No inventory items to update for settlement ${settlementId}`);
+        console.log(
+          `[DynamicScraper] No inventory items to update for settlement ${settlementId}`,
+        );
         return;
       }
 
@@ -345,7 +484,10 @@ class DynamicSettlementScraper {
         .eq('settlement_id', settlementId);
 
       if (deleteError) {
-        console.error(`[DynamicScraper] Error clearing inventory for settlement ${settlementId}:`, deleteError);
+        console.error(
+          `[DynamicScraper] Error clearing inventory for settlement ${settlementId}:`,
+          deleteError,
+        );
         return;
       }
 
@@ -361,13 +503,21 @@ class DynamicSettlementScraper {
         );
 
       if (insertError) {
-        console.error(`[DynamicScraper] Error inserting inventory for settlement ${settlementId}:`, insertError);
+        console.error(
+          `[DynamicScraper] Error inserting inventory for settlement ${settlementId}:`,
+          insertError,
+        );
         throw insertError;
       } else {
-        console.log(`[DynamicScraper] Successfully updated ${inventoryItems.length} inventory items for settlement ${settlementId}`);
+        console.log(
+          `[DynamicScraper] Successfully updated ${inventoryItems.length} inventory items for settlement ${settlementId}`,
+        );
       }
     } catch (error) {
-      console.error(`[DynamicScraper] Error updating inventory for settlement ${settlementId}:`, error);
+      console.error(
+        `[DynamicScraper] Error updating inventory for settlement ${settlementId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -375,9 +525,12 @@ class DynamicSettlementScraper {
   // Reuse the existing parseDataFromScripts method (copied from real-scraper.js)
   async parseDataFromScripts(html) {
     try {
-      console.log('[DynamicScraper] Searching for settlement data in scripts...');
+      console.log(
+        '[DynamicScraper] Searching for settlement data in scripts...',
+      );
 
-      const resolveRegex = /__sveltekit_[^.]+\.resolve\(\s*(\{[\s\S]*?\})\s*\)/g;
+      const resolveRegex =
+        /__sveltekit_[^.]+\.resolve\(\s*(\{[\s\S]*?\})\s*\)/g;
       let match;
       let settlementData = null;
 
@@ -393,7 +546,9 @@ class DynamicSettlementScraper {
             resolveData.data.cargos
           ) {
             settlementData = resolveData.data;
-            console.log('[DynamicScraper] Found inventory data in __sveltekit_*.resolve call');
+            console.log(
+              '[DynamicScraper] Found inventory data in __sveltekit_*.resolve call',
+            );
             break;
           }
         } catch (parseError) {
@@ -412,23 +567,29 @@ class DynamicSettlementScraper {
   async scrapeForUser(userId, settlementId = null) {
     try {
       console.log(`[DynamicScraper] Starting scrape for user ${userId}`);
-      
+
       // If no settlement specified, get user's current/selected settlement
       if (!settlementId) {
         const userSettlements = await this.getUserSettlements(userId);
-        const selectedSettlement = userSettlements.find(s => s.isSelected) || userSettlements[0];
-        
+        const selectedSettlement =
+          userSettlements.find((s) => s.isSelected) || userSettlements[0];
+
         if (!selectedSettlement) {
           throw new Error(`No accessible settlements found for user ${userId}`);
         }
-        
+
         settlementId = selectedSettlement.id;
-        console.log(`[DynamicScraper] Using selected settlement: ${settlementId} (${selectedSettlement.name})`);
+        console.log(
+          `[DynamicScraper] Using selected settlement: ${settlementId} (${selectedSettlement.name})`,
+        );
       }
 
       // Scrape the specific settlement
-      const inventoryItems = await this.scrapeSettlementInventory(settlementId, userId);
-      
+      const inventoryItems = await this.scrapeSettlementInventory(
+        settlementId,
+        userId,
+      );
+
       return {
         success: true,
         settlementId,

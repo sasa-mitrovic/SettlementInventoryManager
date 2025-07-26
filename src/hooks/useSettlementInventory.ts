@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useSettlement } from '../contexts/SettlementContext';
+import { useSettlement } from '../contexts/SettlementContext_simple';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { settlementInventoryService } from '../services/settlementInventoryService';
 
@@ -45,17 +45,30 @@ export function useSettlementInventory(
       setLoading(true);
       setError(null);
 
-      console.log('[useSettlementInventory] Fetching inventory for settlement:', settlementId);
+      console.log(
+        '[useSettlementInventory] Fetching inventory for settlement:',
+        settlementId,
+      );
 
       // First try to get fresh data from the Bitjita API through proxy
       let inventoryData: SettlementInventoryItem[] = [];
-      
+
       try {
-        inventoryData = await settlementInventoryService.fetchSettlementInventory(settlementId);
-        console.log('[useSettlementInventory] Got', inventoryData.length, 'items from proxy');
+        inventoryData =
+          await settlementInventoryService.fetchSettlementInventory(
+            settlementId,
+          );
+        console.log(
+          '[useSettlementInventory] Got',
+          inventoryData.length,
+          'items from proxy',
+        );
       } catch (proxyError) {
-        console.warn('[useSettlementInventory] Proxy failed, falling back to database:', proxyError);
-        
+        console.warn(
+          '[useSettlementInventory] Proxy failed, falling back to database:',
+          proxyError,
+        );
+
         // Fallback to database if proxy fails
         const { data: dbData, error: inventoryError } = await supabaseClient
           .from('settlement_inventory')
@@ -69,7 +82,11 @@ export function useSettlementInventory(
         }
 
         inventoryData = dbData || [];
-        console.log('[useSettlementInventory] Got', inventoryData.length, 'items from database fallback');
+        console.log(
+          '[useSettlementInventory] Got',
+          inventoryData.length,
+          'items from database fallback',
+        );
       }
 
       setData(inventoryData);

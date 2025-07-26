@@ -21,7 +21,7 @@ import {
 } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
-import { useSettlement } from '../contexts/SettlementContext';
+import { useSettlement } from '../contexts/SettlementContext_simple';
 import { getPermissionLevel, getPermissionColor } from '../types/settlement';
 import { PermissionGate } from '../components/PermissionGate';
 import { useSettlementCraftingOrderCounts } from '../hooks/useSettlementCraftingOrderCounts';

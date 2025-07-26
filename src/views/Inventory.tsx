@@ -376,7 +376,7 @@ export function Inventory() {
   // Generate initials from item name (first letter of first two words)
   const getItemInitials = (itemName: string | undefined | null) => {
     if (!itemName) return 'I'; // Handle undefined/null/empty names
-    
+
     const words = itemName.trim().split(/\s+/);
     if (words.length >= 2) {
       return (words[0][0] || '') + (words[1][0] || '');
@@ -883,22 +883,29 @@ export function Inventory() {
                                       0 && (
                                       <Text size="xs">
                                         Base:{' '}
-                                        {(item.package_breakdown.base_quantity || 0).toLocaleString()}
+                                        {(
+                                          item.package_breakdown
+                                            .base_quantity || 0
+                                        ).toLocaleString()}
                                       </Text>
                                     )}
                                     {item.package_breakdown.package_items.map(
                                       (pkg, index) => (
                                         <Text key={index} size="xs">
                                           {pkg.name}:{' '}
-                                          {(pkg.quantity || 0).toLocaleString()} ×{' '}
-                                          {pkg.multiplier} ={' '}
-                                          {(pkg.contribution || 0).toLocaleString()}
+                                          {(pkg.quantity || 0).toLocaleString()}{' '}
+                                          × {pkg.multiplier} ={' '}
+                                          {(
+                                            pkg.contribution || 0
+                                          ).toLocaleString()}
                                         </Text>
                                       ),
                                     )}
                                     <Text size="xs" fw={600} c="blue">
                                       Total:{' '}
-                                      {(item.total_quantity || 0).toLocaleString()}
+                                      {(
+                                        item.total_quantity || 0
+                                      ).toLocaleString()}
                                     </Text>
                                   </Stack>
                                 }
@@ -907,7 +914,9 @@ export function Inventory() {
                               >
                                 <Group gap="xs">
                                   <Text fw={600}>
-                                    {(item.total_quantity || 0).toLocaleString()}
+                                    {(
+                                      item.total_quantity || 0
+                                    ).toLocaleString()}
                                   </Text>
                                   {item.package_breakdown.package_items.length >
                                     0 && (
