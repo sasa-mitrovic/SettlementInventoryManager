@@ -65,7 +65,7 @@ type MemberSortField =
   | 'co_owner';
 type SkillSortField =
   | 'player'
-  | 'total_skills'
+  | 'total_xp'
   | 'highest_level'
   | 'total_level'
   | string; // string for dynamic skill columns
@@ -203,9 +203,9 @@ export function Members() {
           aValue = a;
           bValue = b;
           break;
-        case 'total_skills':
-          aValue = playerInfo[a]?.totalSkills || 0;
-          bValue = playerInfo[b]?.totalSkills || 0;
+        case 'total_xp':
+          aValue = playerInfo[a]?.totalXp || 0;
+          bValue = playerInfo[b]?.totalXp || 0;
           break;
         case 'highest_level':
           aValue = playerInfo[a]?.highestLevel || 0;
@@ -299,7 +299,7 @@ export function Members() {
       {};
     const playerInfo: {
       [username: string]: {
-        totalSkills: number;
+        totalXp: number;
         highestLevel: number;
         totalLevel: number;
       };
@@ -310,7 +310,7 @@ export function Members() {
       if (!playerSkills[username]) {
         playerSkills[username] = {};
         playerInfo[username] = {
-          totalSkills: skill.total_skills || 0,
+          totalXp: skill.total_xp || 0,
           highestLevel: skill.highest_level || 0,
           totalLevel: skill.total_level || 0,
         };
@@ -462,8 +462,8 @@ export function Members() {
                     <Table.Thead>
                       <Table.Tr>
                         <SortableHeader field="player">Player</SortableHeader>
-                        <SortableHeader field="total_skills">
-                          Total Skills
+                        <SortableHeader field="total_xp">
+                          Total EXP
                         </SortableHeader>
                         <SortableHeader field="highest_level">
                           Highest Level
@@ -489,7 +489,7 @@ export function Members() {
                           </Table.Td>
                           <Table.Td ta="center">
                             <Text>
-                              {playerInfo[username]?.totalSkills || 0}
+                              {(playerInfo[username]?.totalXp || 0).toLocaleString()}
                             </Text>
                           </Table.Td>
                           <Table.Td ta="center">
