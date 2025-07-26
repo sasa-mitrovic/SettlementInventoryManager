@@ -64,29 +64,72 @@ export function SettlementSideNav({
   };
 
   if (collapsed) {
-    return (
-      <Box p="xs">
-        <Tooltip
-          label={
-            currentSettlement
-              ? currentSettlement.name
-              : 'No settlement selected'
-          }
-          position="right"
-        >
-          <ActionIcon
-            variant={currentSettlement ? 'filled' : 'subtle'}
-            size="lg"
-            color={
-              currentSettlement
-                ? getPermissionColor(getPermissionLevel(currentSettlement))
-                : 'gray'
-            }
+    if (isLoading) {
+      return (
+        <Box p="xs" style={{ display: 'flex', justifyContent: 'center' }}>
+          <Loader size="sm" />
+        </Box>
+      );
+    }
+
+    if (error || settlements.length === 0) {
+      return (
+        <Box p="xs" style={{ display: 'flex', justifyContent: 'center' }}>
+          <Tooltip 
+            label={error || 'No settlements available'} 
+            position="right"
+            offset={10}
           >
-            <IconMapPin size={20} />
-          </ActionIcon>
-        </Tooltip>
-      </Box>
+            <ActionIcon variant="subtle" size="lg" color="red">
+              <IconAlertCircle size={20} />
+            </ActionIcon>
+          </Tooltip>
+        </Box>
+      );
+    }
+
+    return (
+      <Stack gap="xs" p="xs" style={{ alignItems: 'center' }}>
+        {settlements.map((settlement) => {
+          const isActive = currentSettlement?.entityId === settlement.entityId;
+          const permissionLevel = getPermissionLevel(settlement);
+          const permissionColor = getPermissionColor(permissionLevel);
+
+          return (
+            <Tooltip
+              key={settlement.entityId}
+              label={
+                <Box>
+                  <Text size="sm" fw={500}>
+                    {settlement.name}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {settlement.regionName}
+                  </Text>
+                  <Text size="xs" c={permissionColor}>
+                    {permissionLevel}
+                  </Text>
+                </Box>
+              }
+              position="right"
+              offset={10}
+            >
+              <ActionIcon
+                variant={isActive ? 'filled' : 'subtle'}
+                size="lg"
+                color={isActive ? permissionColor : 'gray'}
+                onClick={() => handleSettlementClick(settlement)}
+                style={{ 
+                  borderRadius: 8,
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {getPermissionIcon(settlement)}
+              </ActionIcon>
+            </Tooltip>
+          );
+        })}
+      </Stack>
     );
   }
 

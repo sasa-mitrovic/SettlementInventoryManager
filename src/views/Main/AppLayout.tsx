@@ -32,7 +32,7 @@ import { notifications } from '@mantine/notifications';
 export const AppLayout = () => {
   const { userProfile } = useOptimizedUserWithProfile();
   const navigate = useNavigate();
-  const [opened, { toggle }] = useDisclosure();
+  const [sidebarOpened, { toggle: toggleSidebar }] = useDisclosure(true); // Start expanded by default
   const { hasPermission: hasSettingsAccess, loading: permissionLoading } =
     useHasPermission('settings.read');
 
@@ -114,20 +114,21 @@ export const AppLayout = () => {
         <AppShell
           header={{ height: 60 }}
           navbar={{
-            width: 300,
+            width: sidebarOpened ? 300 : 60,
             breakpoint: 'sm',
-            collapsed: { mobile: !opened },
+            collapsed: { mobile: false }, // Always show on desktop
           }}
           padding="md"
+          transitionDuration={200}
+          transitionTimingFunction="ease"
         >
           <AppShell.Header>
             <Group h="100%" px="md" justify="space-between">
               {/* Left side with burger menu and title */}
               <Group>
                 <Burger
-                  opened={opened}
-                  onClick={toggle}
-                  hiddenFrom="sm"
+                  opened={sidebarOpened}
+                  onClick={toggleSidebar}
                   size="sm"
                 />
                 <Link
@@ -202,7 +203,7 @@ export const AppLayout = () => {
           </AppShell.Header>
 
           <AppShell.Navbar>
-            <SettlementSideNav />
+            <SettlementSideNav collapsed={!sidebarOpened} />
           </AppShell.Navbar>
 
           <AppShell.Main>
