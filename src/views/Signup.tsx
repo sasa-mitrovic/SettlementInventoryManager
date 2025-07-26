@@ -33,13 +33,11 @@ export function Signup() {
     entityId: string | null;
     playerName: string | null;
     empireName: string | null;
-    userId: string | null;
     empireId: string | null;
   }>({
     entityId: null,
     playerName: null,
     empireName: null,
-    userId: null,
     empireId: null,
   });
 
@@ -129,7 +127,6 @@ export function Signup() {
           data: {
             in_game_name: values.inGameName,
             empire: selectedPlayerData.empireName || null, // null for independent players
-            bitjita_user_id: selectedPlayerData.entityId,
             bitjita_empire_id: selectedPlayerData.empireId, // null for independent players
           },
         },
@@ -156,6 +153,19 @@ export function Signup() {
         setTimeout(async () => {
           try {
             if (data.user?.id) {
+              console.log('🔧 Current selectedPlayerData:', selectedPlayerData);
+              console.log('🔧 Completing user signup with data:', {
+                user_id: data.user.id,
+                user_email: values.email,
+                user_in_game_name: values.inGameName,
+                user_empire: selectedPlayerData.empireName || null,
+                user_bitjita_user_id: selectedPlayerData.entityId || null,
+                user_bitjita_empire_id: selectedPlayerData.empireId || null,
+              });
+
+              console.log(
+                '🔧 About to call complete_user_signup RPC function...',
+              );
               const { data: profileData, error: profileError } =
                 await supabaseClient.rpc('complete_user_signup', {
                   user_id: data.user.id,
@@ -165,27 +175,41 @@ export function Signup() {
                   user_bitjita_user_id: selectedPlayerData.entityId || null,
                   user_bitjita_empire_id: selectedPlayerData.empireId || null, // null for independent players
                 });
+              console.log('🔧 RPC call completed. Result:', {
+                profileData,
+                profileError,
+              });
 
               if (profileError) {
-                console.error('Error completing profile:', profileError);
+                console.error('❌ Error completing profile:', profileError);
+                console.error('❌ Profile error details:', {
+                  message: profileError.message,
+                  details: profileError.details,
+                  hint: profileError.hint,
+                  code: profileError.code,
+                });
                 // Don't show this error to user since signup was successful
                 // This is just a fallback mechanism
               } else if (profileData) {
                 if (profileData.success) {
                   console.log(
-                    'Profile completion successful:',
+                    '✅ Profile completion successful:',
                     profileData.message,
                   );
                 } else {
                   console.error(
-                    'Profile completion failed:',
+                    '❌ Profile completion failed:',
                     profileData.error,
                   );
                   // Log additional details if available
                   if (profileData.error_detail) {
-                    console.error('SQL State:', profileData.error_detail);
+                    console.error('❌ SQL State:', profileData.error_detail);
                   }
                 }
+              } else {
+                console.error(
+                  '❌ No profile data returned from complete_user_signup',
+                );
               }
             }
           } catch (err) {
@@ -209,20 +233,19 @@ export function Signup() {
       entityId: string | null,
       playerName: string | null,
       empireName: string | null,
-      userId: string | null,
       empireId: string | null,
     ) => {
       setSelectedPlayerData({
         entityId,
         playerName,
         empireName,
-        userId,
         empireId,
       });
 
       if (playerName) {
         form.setFieldValue('inGameName', playerName);
       }
+      console.log('🔧 Player selected:', selectedPlayerData);
     },
     [form],
   );

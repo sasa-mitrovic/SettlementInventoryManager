@@ -3,7 +3,6 @@
 
 export interface BitjitaPlayer {
   entityId: string;
-  userId?: string; // Added to track user ID from API if available
   username: string;
   signedIn: boolean;
   timePlayed: number;

@@ -26,7 +26,6 @@ interface PlayerSearchSelectProps {
     entityId: string | null,
     playerName: string | null,
     empireName: string | null,
-    userId: string | null,
     empireId: string | null,
   ) => void;
   onValidationResult?: (
@@ -113,13 +112,10 @@ export function PlayerSearchSelect({
             selectedPlayer.empireMemberships[0].empireEntityId
           : null;
 
-      const userId = selectedPlayer.userId || null;
-
       onChange(
         selectedPlayer.entityId,
         selectedPlayer.username,
         empireName,
-        userId,
         empireId,
       );
     }

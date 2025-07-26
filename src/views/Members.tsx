@@ -489,7 +489,9 @@ export function Members() {
                           </Table.Td>
                           <Table.Td ta="center">
                             <Text>
-                              {(playerInfo[username]?.totalXp || 0).toLocaleString()}
+                              {(
+                                playerInfo[username]?.totalXp || 0
+                              ).toLocaleString()}
                             </Text>
                           </Table.Td>
                           <Table.Td ta="center">
