@@ -89,13 +89,13 @@ class BitjitaPlayerService {
     try {
       console.log('🌐 Making API request to:', url);
 
-      // First try Vite proxy (for local development)
+      // Use backend proxy for API requests
       try {
-        const proxyUrl = `/api/bitjita-proxy${endpoint}`;
-        console.log('🔄 Trying Vite proxy:', proxyUrl);
+        const proxyUrl = `/api/bitjita-proxy?endpoint=${endpoint.substring(1)}`; // Remove leading slash
+        console.log('🔄 Using backend proxy:', proxyUrl);
         const proxyResponse = await fetch(proxyUrl);
         if (proxyResponse.ok) {
-          console.log('✅ Vite proxy request successful');
+          console.log('✅ Backend proxy request successful');
           return await proxyResponse.json();
         }
         console.log('⚠️ Vite proxy failed, trying direct request...');

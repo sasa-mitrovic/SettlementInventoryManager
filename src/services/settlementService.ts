@@ -95,8 +95,8 @@ class SettlementService {
         );
       }
 
-      // Fetch player details from Bitjita API using proxy
-      const playerDetailsUrl = `/api/bitjita-proxy?endpoint=players/${userProfile.bitjita_user_id}&format=raw`;
+      // Fetch player details from Bitjita API using backend proxy
+      const playerDetailsUrl = `/api/bitjita-proxy?endpoint=players/${userProfile.bitjita_user_id}`;
 
       console.log(
         `[SettlementService] Fetching player details from: ${playerDetailsUrl}`,

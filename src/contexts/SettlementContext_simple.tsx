@@ -37,17 +37,23 @@ export function SettlementProvider({ children }: SettlementProviderProps) {
       );
     }
 
-    // Step 2: Fetch player settlements from Bitjita API via proxy
-    const playerUrl = `/api/bitjita-proxy?endpoint=players/${userProfile.bitjita_user_id}&format=raw`;
-    console.log('🌐 Fetching player data from:', playerUrl);
+    // Step 2: Fetch player settlements from Bitjita API via backend proxy
+    const playerUrl = `/api/bitjita-proxy?endpoint=players/${userProfile.bitjita_user_id}`;
+    console.log('🌐 Fetching player data from backend proxy:', playerUrl);
 
     const response = await fetch(playerUrl);
-    console.log('🌐 Fetch response status:', response.status, response.statusText);
-    
+    console.log(
+      '🌐 Fetch response status:',
+      response.status,
+      response.statusText,
+    );
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('🌐 Fetch error details:', errorText);
-      throw new Error(`Failed to fetch player data: ${response.status} ${response.statusText}. Error: ${errorText}`);
+      throw new Error(
+        `Failed to fetch player data: ${response.status} ${response.statusText}. Error: ${errorText}`,
+      );
     }
 
     const playerData: any = await response.json();

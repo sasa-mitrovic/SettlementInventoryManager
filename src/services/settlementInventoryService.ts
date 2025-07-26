@@ -54,9 +54,9 @@ class SettlementInventoryService {
     }
 
     try {
-      const proxyUrl = `/api/bitjita-proxy?endpoint=claims/${settlementId}/inventories&format=raw`;
+      const proxyUrl = `/api/bitjita-proxy?endpoint=claims/${settlementId}/inventories`;
       console.log(
-        '[SettlementInventoryService] Fetching from proxy:',
+        '[SettlementInventoryService] Fetching from backend proxy:',
         proxyUrl,
       );
 
