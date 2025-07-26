@@ -75,8 +75,8 @@ export function SettlementSideNav({
     if (error || settlements.length === 0) {
       return (
         <Box p="xs" style={{ display: 'flex', justifyContent: 'center' }}>
-          <Tooltip 
-            label={error || 'No settlements available'} 
+          <Tooltip
+            label={error || 'No settlements available'}
             position="right"
             offset={10}
           >
@@ -119,9 +119,9 @@ export function SettlementSideNav({
                 size="lg"
                 color={isActive ? permissionColor : 'gray'}
                 onClick={() => handleSettlementClick(settlement)}
-                style={{ 
+                style={{
                   borderRadius: 8,
-                  transition: 'all 0.2s ease'
+                  transition: 'all 0.2s ease',
                 }}
               >
                 {getPermissionIcon(settlement)}
