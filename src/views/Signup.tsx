@@ -79,6 +79,27 @@ export function Signup() {
       return;
     }
 
+    // Check email availability before attempting signup
+    try {
+      const { data: emailCheck, error: emailCheckError } =
+        await supabaseClient.rpc('check_email_availability', {
+          email_to_check: values.email,
+        });
+
+      if (!emailCheckError && emailCheck && !emailCheck.available) {
+        setSignupError(
+          'This email address is already in use. Please use a different email or sign in instead.',
+        );
+        return;
+      }
+    } catch (emailCheckErr) {
+      console.warn(
+        'Email availability check failed, proceeding with signup:',
+        emailCheckErr,
+      );
+      // Continue with signup even if check fails
+    }
+
     // Require that a player was actually selected from the search results
     if (!selectedPlayerData.entityId || !selectedPlayerData.playerName) {
       setSignupError(
@@ -98,6 +119,8 @@ export function Signup() {
     setIsLoading(true);
 
     try {
+      // Note: Empire data can be null for independent players (players without empire membership)
+      // The system supports both empire members and independent players
       const { data, error } = await supabaseClient.auth.signUp({
         email: values.email,
         password: values.password,
@@ -105,18 +128,31 @@ export function Signup() {
           emailRedirectTo: `${window.location.origin}/auth`,
           data: {
             in_game_name: values.inGameName,
-            empire: selectedPlayerData.empireName || null,
+            empire: selectedPlayerData.empireName || null, // null for independent players
             bitjita_user_id: selectedPlayerData.entityId,
-            bitjita_empire_id: selectedPlayerData.empireId,
+            bitjita_empire_id: selectedPlayerData.empireId, // null for independent players
           },
         },
       });
 
       if (error) {
-        setSignupError(error.message);
+        console.error('Signup error details:', error);
+        // Provide more specific error messages based on the error type
+        if (error.message?.includes('Database error saving new user')) {
+          setSignupError(
+            'There was an issue creating your account. This might be due to a configuration problem. Please try again or contact support if the issue persists.',
+          );
+        } else if (error.message?.includes('User already registered')) {
+          setSignupError(
+            'An account with this email already exists. Please try signing in instead.',
+          );
+        } else {
+          setSignupError(error.message);
+        }
       } else if (data.user) {
         // Wait a moment and then ensure the profile has the in_game_name
         // This is a fallback in case the trigger doesn't work
+        // Note: Supports both empire members and independent players (null empire values)
         setTimeout(async () => {
           try {
             if (data.user?.id) {
@@ -125,15 +161,31 @@ export function Signup() {
                   user_id: data.user.id,
                   user_email: values.email,
                   user_in_game_name: values.inGameName,
-                  user_empire: selectedPlayerData.empireName || null,
+                  user_empire: selectedPlayerData.empireName || null, // null for independent players
                   user_bitjita_user_id: selectedPlayerData.entityId || null,
-                  user_bitjita_empire_id: selectedPlayerData.empireId || null,
+                  user_bitjita_empire_id: selectedPlayerData.empireId || null, // null for independent players
                 });
 
               if (profileError) {
                 console.error('Error completing profile:', profileError);
-              } else if (profileData && !profileData.success) {
-                console.error('Profile completion failed:', profileData.error);
+                // Don't show this error to user since signup was successful
+                // This is just a fallback mechanism
+              } else if (profileData) {
+                if (profileData.success) {
+                  console.log(
+                    'Profile completion successful:',
+                    profileData.message,
+                  );
+                } else {
+                  console.error(
+                    'Profile completion failed:',
+                    profileData.error,
+                  );
+                  // Log additional details if available
+                  if (profileData.error_detail) {
+                    console.error('SQL State:', profileData.error_detail);
+                  }
+                }
               }
             }
           } catch (err) {
@@ -238,7 +290,7 @@ export function Signup() {
                 disabled={true}
                 description={
                   selectedPlayerData.playerName
-                    ? `Selected: ${selectedPlayerData.playerName}${selectedPlayerData.empireName ? ` (Empire: ${selectedPlayerData.empireName})` : ' (No Empire)'}`
+                    ? `Selected: ${selectedPlayerData.playerName}${selectedPlayerData.empireName ? ` (Empire: ${selectedPlayerData.empireName})` : ' (No Empire - Independent Player)'}`
                     : 'You must select your username from the search results above'
                 }
                 {...form.getInputProps('inGameName')}

@@ -34,6 +34,8 @@ export async function getCurrentUserProfile(): Promise<UserWithRole | null> {
       return null;
     }
 
+    console.log('🔍 Raw profile from database:', profile);
+    console.log('🔍 Profile bitjita_user_id:', profile.bitjita_user_id);
     return profile as UserWithRole;
   } catch (error) {
     console.error('Error in getCurrentUserProfile:', error);

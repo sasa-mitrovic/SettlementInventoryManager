@@ -59,7 +59,9 @@ export function PlayerSearchSelect({
     setSearchValue,
     selectedPlayer,
     selectPlayerById,
-  } = usePlayerSearch();
+  } = usePlayerSearch({
+    errorGracePeriodMs: 1500, // Show errors only after 1.5 seconds
+  });
 
   const {
     validationResult,
@@ -232,7 +234,7 @@ export function PlayerSearchSelect({
                 selectedPlayer.empireMemberships.length > 0 ? (
                   <>Empire: {selectedPlayer.empireMemberships[0].empireName}</>
                 ) : (
-                  'No empire membership'
+                  'Independent player (no empire)'
                 )}
               </Text>
             </div>

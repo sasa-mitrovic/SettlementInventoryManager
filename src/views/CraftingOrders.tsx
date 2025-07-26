@@ -33,39 +33,23 @@ import { Link } from 'react-router-dom';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
 import { useUnifiedItems, UnifiedItem } from '../services/unifiedItemService';
+import { useSettlement } from '../contexts/SettlementContext';
+import {
+  useSettlementCraftingOrders,
+  SettlementCraftingOrder,
+} from '../hooks/useSettlementCraftingOrders';
 
-interface CraftingOrder {
-  id: string;
-  created_at: string;
-  item_id: string;
-  item_name: string;
-  item_icon?: string;
-  item_tier?: string;
-  quantity: number;
-  sector?: string;
-  status: 'unassigned' | 'assigned' | 'completed';
-  placed_by: string;
-  claimed_by?: string;
-  completed_at?: string;
-  completed_by?: string;
-  placed_by_profile?: {
-    in_game_name?: string;
-    email: string;
-  };
-  claimed_by_profile?: {
-    in_game_name?: string;
-    email: string;
-  };
-  completed_by_profile?: {
-    in_game_name?: string;
-    email: string;
-  };
-}
+// Use the SettlementCraftingOrder interface from the hook
+type CraftingOrder = SettlementCraftingOrder;
 
 export function CraftingOrders() {
-  const [orders, setOrders] = useState<CraftingOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { currentSettlement } = useSettlement();
+  const {
+    data: orders,
+    loading: ordersLoading,
+    error: ordersError,
+    refetch: refetchOrders,
+  } = useSettlementCraftingOrders();
   const [showCompleted, setShowCompleted] = useState(false);
   const [claimingOrder, setClaimingOrder] = useState<string | null>(null);
   const [completingOrder, setCompletingOrder] = useState<string | null>(null);
@@ -88,6 +72,16 @@ export function CraftingOrders() {
   // Initialize filtered items when allItems changes
   useEffect(() => {
     if (allItems && allItems.length > 0) {
+      console.log('🔍 [CraftingOrders] Total items loaded:', allItems.length);
+      const itemsByType = allItems.reduce(
+        (acc, item) => {
+          acc[item.type] = (acc[item.type] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
+      console.log('📊 [CraftingOrders] Items by type:', itemsByType);
+      console.log('📦 [CraftingOrders] Sample items:', allItems.slice(0, 5));
       setFilteredItems(allItems.slice(0, 50));
     }
   }, [allItems]);
@@ -108,13 +102,24 @@ export function CraftingOrders() {
       // Debounce the filtering with a very short delay
       filterTimeoutRef.current = setTimeout(() => {
         if (!value.trim()) {
+          console.log('🔍 [CraftingOrders] Showing all items (first 50)');
           setFilteredItems(allItems.slice(0, 50));
         } else {
           const searchLower = value.toLowerCase();
+          console.log('🔍 [CraftingOrders] Searching for:', searchLower);
           const filtered = allItems.filter(
             (item: UnifiedItem) =>
               item.name.toLowerCase().includes(searchLower) &&
               !item.name.endsWith('Output'),
+          );
+          console.log(
+            '📝 [CraftingOrders] Search results:',
+            filtered.length,
+            'items found',
+          );
+          console.log(
+            '📦 [CraftingOrders] Sample search results:',
+            filtered.slice(0, 3),
           );
           setFilteredItems(filtered);
         }
@@ -162,72 +167,6 @@ export function CraftingOrders() {
     },
   });
 
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Use the new database function that includes user names and bypasses RLS
-      const { data: ordersData, error: ordersError } = await supabaseClient.rpc(
-        'get_crafting_orders_with_names',
-      );
-
-      if (ordersError) {
-        console.error('Error fetching crafting orders:', ordersError);
-        throw ordersError;
-      }
-
-      // Transform the data to match our interface
-      const transformedOrders =
-        ordersData?.map((order: any) => ({
-          ...order,
-          // Create profile objects for compatibility with existing formatUserName function
-          placed_by_profile: order.placed_by_name
-            ? {
-                in_game_name: order.placed_by_name,
-                email: order.placed_by_name,
-              }
-            : null,
-          claimed_by_profile: order.claimed_by_name
-            ? {
-                in_game_name: order.claimed_by_name,
-                email: order.claimed_by_name,
-              }
-            : null,
-          completed_by_profile: order.completed_by_name
-            ? {
-                in_game_name: order.completed_by_name,
-                email: order.completed_by_name,
-              }
-            : null,
-        })) || [];
-
-      // Sort orders with unassigned first, then assigned, then completed
-      const sortedOrders = transformedOrders.sort(
-        (a: CraftingOrder, b: CraftingOrder) => {
-          const statusOrder = { unassigned: 0, assigned: 1, completed: 2 };
-          const aOrder = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
-          const bOrder = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
-
-          if (aOrder !== bOrder) {
-            return aOrder - bOrder;
-          }
-
-          // If same status, sort by creation date (newest first)
-          return (
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          );
-        },
-      );
-
-      setOrders(sortedOrders);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch orders');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const claimOrder = async (orderId: string) => {
     if (!userProfile) return;
 
@@ -250,7 +189,7 @@ export function CraftingOrders() {
         color: 'green',
       });
 
-      await fetchOrders();
+      await refetchOrders();
     } catch (err) {
       notifications.show({
         title: 'Claim Failed',
@@ -285,7 +224,7 @@ export function CraftingOrders() {
         color: 'green',
       });
 
-      await fetchOrders();
+      await refetchOrders();
     } catch (err) {
       notifications.show({
         title: 'Complete Failed',
@@ -341,7 +280,7 @@ export function CraftingOrders() {
         color: 'blue',
       });
 
-      await fetchOrders();
+      await refetchOrders();
     } catch (err) {
       notifications.show({
         title: 'Cancel Failed',
@@ -389,7 +328,7 @@ export function CraftingOrders() {
         color: 'blue',
       });
 
-      await fetchOrders();
+      await refetchOrders();
     } catch (err) {
       notifications.show({
         title: 'Unclaim Failed',
@@ -421,8 +360,10 @@ export function CraftingOrders() {
   const submitOrder = async (values: typeof form.values) => {
     if (!userProfile) return;
 
-    // Look for the selected item in allItems instead of just items
-    const selectedItem = allItems.find((item) => item.id === values.item_id);
+    // Find the selected item using the new unique value format
+    const selectedOption = itemSelectData.find(option => option.value === values.item_id);
+    const selectedItem = selectedOption?.item;
+    
     if (!selectedItem) {
       notifications.show({
         title: 'Error',
@@ -442,6 +383,7 @@ export function CraftingOrders() {
         quantity: values.quantity,
         sector: values.sector,
         placed_by: userProfile.id,
+        settlement_id: currentSettlement?.entityId,
         status: 'unassigned',
       });
 
@@ -455,7 +397,7 @@ export function CraftingOrders() {
 
       form.reset();
       handleCloseModal();
-      await fetchOrders();
+      await refetchOrders();
     } catch (err) {
       notifications.show({
         title: 'Create Failed',
@@ -518,21 +460,30 @@ export function CraftingOrders() {
       }
     }
 
-    return selectItems.map((item: UnifiedItem) => ({
-      value: item.id,
+    // Remove duplicates by ID to avoid Mantine Select error
+    const uniqueItems = selectItems.reduce((acc: UnifiedItem[], current: UnifiedItem) => {
+      const existingItem = acc.find(item => item.id === current.id);
+      if (!existingItem) {
+        acc.push(current);
+      }
+      return acc;
+    }, []);
+
+    return uniqueItems.map((item: UnifiedItem, index: number) => ({
+      value: `${item.id}_${item.type}_${index}`, // Make value unique by combining id, type, and index
       label: `${item.name} (${item.tier || 'Unknown'})`,
       item: item, // Store full item for rendering
+      originalId: item.id, // Store original ID for form submission
     }));
   }, [filteredItems, allItems, form.values.item_id]);
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  // Remove the problematic useEffect that was causing infinite API calls
+  // The hook already handles fetching orders when currentSettlement changes
 
   // Display any item loading errors
   // Remove error handling as unified service handles errors internally
 
-  if (loading) {
+  if (ordersLoading) {
     return (
       <Container size="xl" py="xl">
         <Center h={400}>
@@ -572,9 +523,9 @@ export function CraftingOrders() {
           </Group>
         </Group>
 
-        {error && (
+        {ordersError && (
           <Alert color="red" title="Error">
-            {error}
+            {ordersError}
           </Alert>
         )}
 
@@ -617,7 +568,9 @@ export function CraftingOrders() {
                   <Table.Td>
                     <Text fw={500}>{order.quantity}</Text>
                   </Table.Td>
-                  <Table.Td>{formatUserName(order.placed_by_profile)}</Table.Td>
+                  <Table.Td>
+                    {formatUserName(order.placed_by_profile || undefined)}
+                  </Table.Td>
                   <Table.Td>
                     {order.status === 'unassigned' ? (
                       <Button
@@ -631,20 +584,24 @@ export function CraftingOrders() {
                       </Button>
                     ) : order.claimed_by_profile ? (
                       <Group gap="xs">
-                        <Text>{formatUserName(order.claimed_by_profile)}</Text>
-                        {userProfile && 
-                         order.claimed_by === userProfile.id && 
-                         order.status !== 'completed' && (
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            color="blue"
-                            leftSection={<IconUserMinus size={12} />}
-                            onClick={() => confirmUnclaimOrder(order)}
-                          >
-                            Unclaim
-                          </Button>
-                        )}
+                        <Text>
+                          {formatUserName(
+                            order.claimed_by_profile || undefined,
+                          )}
+                        </Text>
+                        {userProfile &&
+                          order.claimed_by === userProfile.id &&
+                          order.status !== 'completed' && (
+                            <Button
+                              size="xs"
+                              variant="subtle"
+                              color="blue"
+                              leftSection={<IconUserMinus size={12} />}
+                              onClick={() => confirmUnclaimOrder(order)}
+                            >
+                              Unclaim
+                            </Button>
+                          )}
                       </Group>
                     ) : (
                       'N/A'

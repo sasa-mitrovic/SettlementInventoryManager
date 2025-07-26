@@ -21,6 +21,7 @@ RETURNS TABLE (
     claimed_by UUID,
     completed_at TIMESTAMP WITH TIME ZONE,
     completed_by UUID,
+    settlement_id TEXT,
     placed_by_name TEXT,
     claimed_by_name TEXT,
     completed_by_name TEXT
@@ -41,6 +42,7 @@ BEGIN
         co.claimed_by,
         co.completed_at,
         co.completed_by,
+        co.settlement_id::TEXT,
         -- Get display names for all user references, cast to TEXT to ensure type consistency
         COALESCE(placed_by_profile.in_game_name::TEXT, placed_by_profile.email::TEXT, 'Unknown User'::TEXT) as placed_by_name,
         COALESCE(claimed_by_profile.in_game_name::TEXT, claimed_by_profile.email::TEXT, 'Unknown User'::TEXT) as claimed_by_name,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Title,
@@ -40,6 +40,7 @@ import { useOptimizedUser } from '../supabase/loader';
 import { useDebouncedValue, useDisclosure } from '@mantine/hooks';
 import { CraftingOrderModal } from '../components/CraftingOrderModal';
 import { useUnifiedItems } from '../services/unifiedItemService';
+import { useSettlementInventory } from '../hooks/useSettlementInventory';
 
 interface InventoryItem {
   id: string;
@@ -100,10 +101,15 @@ interface SortState {
 }
 
 export function Inventory() {
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const {
+    data: inventory,
+    loading: inventoryLoading,
+    error: inventoryError,
+    refetch: refetchInventory,
+  } = useSettlementInventory();
   const [targets, setTargets] = useState<InventoryTarget[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [targetsLoading, setTargetsLoading] = useState(true);
+  const [targetsError, setTargetsError] = useState<string | null>(null);
   const [showCombined, setShowCombined] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,62 +142,6 @@ export function Inventory() {
 
   // Get unified items and cargos from cache
   const { items: globalItems, loading: globalItemsLoading } = useUnifiedItems();
-
-  // Debug log to verify unified data
-  React.useEffect(() => {
-    console.log('[Inventory] Unified items loaded:', globalItems?.length || 0);
-    const itemCount = globalItems.filter((item) => item.type === 'item').length;
-    const cargoCount = globalItems.filter(
-      (item) => item.type === 'cargo',
-    ).length;
-    console.log(
-      `[Inventory] Breakdown: ${itemCount} items + ${cargoCount} cargos = ${globalItems.length} total`,
-    );
-    if (globalItems && globalItems.length > 0) {
-      const leatherCargos = globalItems.filter(
-        (item) =>
-          item.type === 'cargo' && item.name.toLowerCase().includes('leather'),
-      );
-      console.log('[Inventory] Leather cargos found:', leatherCargos.length);
-      console.log(
-        '[Inventory] Sample leather cargos:',
-        leatherCargos.slice(0, 5).map((c) => c.name),
-      );
-
-      // Test search for other items
-      const stoneCargos = globalItems.filter(
-        (item) =>
-          item.type === 'cargo' && item.name.toLowerCase().includes('stone'),
-      );
-      console.log('[Inventory] Stone cargos found:', stoneCargos.length);
-      console.log(
-        '[Inventory] Sample stone cargos:',
-        stoneCargos.slice(0, 5).map((c) => c.name),
-      );
-
-      // Test search patterns that user is trying
-      const sheetCargos = globalItems.filter(
-        (item) =>
-          item.type === 'cargo' && item.name.toLowerCase().includes('sheet'),
-      );
-      console.log('[Inventory] "sheet" search result:', sheetCargos.length);
-
-      const sheetingCargos = globalItems.filter(
-        (item) =>
-          item.type === 'cargo' && item.name.toLowerCase().includes('sheeting'),
-      );
-      console.log(
-        '[Inventory] "sheeting" search result:',
-        sheetingCargos.length,
-      );
-
-      const packageCargos = globalItems.filter(
-        (item) =>
-          item.type === 'cargo' && item.name.toLowerCase().includes('package'),
-      );
-      console.log('[Inventory] "package" search result:', packageCargos.length);
-    }
-  }, [globalItems]);
   // Theme-aware color function for target highlighting
   const getTargetColors = () => {
     if (computedColorScheme === 'dark') {
@@ -274,26 +224,10 @@ export function Inventory() {
     });
   };
 
-  const fetchInventory = async () => {
+  const fetchTargets = useCallback(async () => {
     try {
-      const { data: inventoryData, error: inventoryError } =
-        await supabaseClient
-          .from('settlement_inventory')
-          .select('*')
-          .order('location', { ascending: true })
-          .order('item_name', { ascending: true });
-
-      if (inventoryError) throw inventoryError;
-      setInventory(inventoryData || []);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch inventory',
-      );
-    }
-  };
-
-  const fetchTargets = async () => {
-    try {
+      setTargetsLoading(true);
+      setTargetsError(null);
       const { data: targetsData, error: targetsError } = await supabaseClient
         .from('inventory_targets')
         .select('*');
@@ -301,34 +235,36 @@ export function Inventory() {
       if (targetsError) throw targetsError;
       setTargets(targetsData || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch targets');
+      setTargetsError(
+        err instanceof Error ? err.message : 'Failed to fetch targets',
+      );
+    } finally {
+      setTargetsLoading(false);
     }
-  };
+  }, []);
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchInventory(), fetchTargets()]);
+    await Promise.all([refetchInventory(), fetchTargets()]);
     setRefreshing(false);
-  };
+  }, [refetchInventory, fetchTargets]);
 
   useEffect(() => {
     const loadData = async () => {
-      setLoading(true);
-      await Promise.all([fetchInventory(), fetchTargets()]);
-      setLoading(false);
+      await Promise.all([refetchInventory(), fetchTargets()]);
     };
     loadData();
 
-    // Use polling for updates since real-time is disabled
-    const pollInterval = setInterval(() => {
-      fetchInventory();
-      fetchTargets();
-    }, 30000); // Poll every 30 seconds
+    // Temporarily disable polling to resolve resource exhaustion
+    // const pollInterval = setInterval(() => {
+    //   refetchInventory();
+    //   fetchTargets();
+    // }, 30000); // Poll every 30 seconds
 
-    return () => {
-      clearInterval(pollInterval);
-    };
-  }, []);
+    // return () => {
+    //   clearInterval(pollInterval);
+    // };
+  }, [refetchInventory, fetchTargets]); // Now using stable functions
 
   const updateTarget = async (
     itemName: string,
@@ -418,8 +354,9 @@ export function Inventory() {
       : currentTarget || 0;
   };
 
-  const getRarityColor = (rarity: string | null | undefined) => {
-    const rarityStr = rarity?.toLowerCase();
+  const getRarityColor = (rarity: string | null | undefined | number) => {
+    // Handle non-string values safely
+    const rarityStr = rarity?.toString()?.toLowerCase();
     switch (rarityStr) {
       case 'common':
         return 'gray';
@@ -437,7 +374,9 @@ export function Inventory() {
   };
 
   // Generate initials from item name (first letter of first two words)
-  const getItemInitials = (itemName: string) => {
+  const getItemInitials = (itemName: string | undefined | null) => {
+    if (!itemName) return 'I'; // Handle undefined/null/empty names
+    
     const words = itemName.trim().split(/\s+/);
     if (words.length >= 2) {
       return (words[0][0] || '') + (words[1][0] || '');
@@ -451,7 +390,7 @@ export function Inventory() {
   const ItemIcon = ({
     item,
   }: {
-    item: { icon: string | null; item_name: string };
+    item: { icon: string | null; item_name: string | undefined | null };
   }) => {
     const [imageError, setImageError] = useState(false);
 
@@ -482,7 +421,7 @@ export function Inventory() {
               ? item.icon
               : 'GeneratedIcons/' + item.icon
         }.webp`}
-        alt={item.item_name}
+        alt={item.item_name || 'Item'}
         w={24}
         h={24}
         fit="contain"
@@ -730,7 +669,7 @@ export function Inventory() {
     return Math.ceil(totalItems / itemsPerPage);
   };
 
-  if (loading || globalItemsLoading) {
+  if (inventoryLoading || targetsLoading || globalItemsLoading) {
     return (
       <Center h={400}>
         <Loader size="lg" />
@@ -767,9 +706,9 @@ export function Inventory() {
             </Button>
           </Group>
 
-          {error && (
+          {(inventoryError || targetsError) && (
             <Alert color="red" title="Error">
-              {error}
+              {inventoryError || targetsError}
             </Alert>
           )}
 
@@ -855,7 +794,7 @@ export function Inventory() {
                                 </Table.Td>
                                 <Table.Td>
                                   <Text fw={600}>
-                                    {item.quantity.toLocaleString()}
+                                    {(item.quantity || 0).toLocaleString()}
                                   </Text>
                                 </Table.Td>
                               </Table.Tr>
@@ -944,22 +883,22 @@ export function Inventory() {
                                       0 && (
                                       <Text size="xs">
                                         Base:{' '}
-                                        {item.package_breakdown.base_quantity.toLocaleString()}
+                                        {(item.package_breakdown.base_quantity || 0).toLocaleString()}
                                       </Text>
                                     )}
                                     {item.package_breakdown.package_items.map(
                                       (pkg, index) => (
                                         <Text key={index} size="xs">
                                           {pkg.name}:{' '}
-                                          {pkg.quantity.toLocaleString()} ×{' '}
+                                          {(pkg.quantity || 0).toLocaleString()} ×{' '}
                                           {pkg.multiplier} ={' '}
-                                          {pkg.contribution.toLocaleString()}
+                                          {(pkg.contribution || 0).toLocaleString()}
                                         </Text>
                                       ),
                                     )}
                                     <Text size="xs" fw={600} c="blue">
                                       Total:{' '}
-                                      {item.total_quantity.toLocaleString()}
+                                      {(item.total_quantity || 0).toLocaleString()}
                                     </Text>
                                   </Stack>
                                 }
@@ -968,7 +907,7 @@ export function Inventory() {
                               >
                                 <Group gap="xs">
                                   <Text fw={600}>
-                                    {item.total_quantity.toLocaleString()}
+                                    {(item.total_quantity || 0).toLocaleString()}
                                   </Text>
                                   {item.package_breakdown.package_items.length >
                                     0 && (
@@ -984,7 +923,7 @@ export function Inventory() {
                               </Tooltip>
                             ) : (
                               <Text fw={600}>
-                                {item.total_quantity.toLocaleString()}
+                                {(item.total_quantity || 0).toLocaleString()}
                               </Text>
                             )}
                           </Table.Td>

@@ -24,9 +24,9 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 class BitjitaRealScraper {
   constructor() {
-    this.settlementUrl = 'https://bitjita.com/claims/144115188105096768';
-    this.inventoryApiUrl =
-      'https://bitjita.com/api/claims/144115188105096768/inventories';
+    this.settlementId = '144115188105096768'; // Extract settlement ID as property
+    this.settlementUrl = `https://bitjita.com/claims/${this.settlementId}`;
+    this.inventoryApiUrl = `https://bitjita.com/api/claims/${this.settlementId}/inventories`;
     this.baseUrl = 'https://bitjita.com';
   }
 
@@ -465,23 +465,24 @@ class BitjitaRealScraper {
         return;
       }
 
-      // Clear existing inventory data
+      // Clear existing inventory data for this settlement
       const { error: deleteError } = await supabase
         .from('settlement_inventory')
         .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('settlement_id', this.settlementId);
 
       if (deleteError) {
         console.error('Error clearing inventory:', deleteError);
         return;
       }
 
-      // Insert new inventory data
+      // Insert new inventory data with settlement_id
       const { error: insertError } = await supabase
         .from('settlement_inventory')
         .insert(
           items.map((item) => ({
             ...item,
+            settlement_id: this.settlementId,
             updated_at: new Date().toISOString(),
           })),
         );

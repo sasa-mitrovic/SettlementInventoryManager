@@ -22,8 +22,8 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 class BitjitaScraper {
-  constructor() {
-    this.settlementId = '144115188105096768';
+  constructor(settlementId = '144115188105096768') {
+    this.settlementId = settlementId;
     this.baseUrl = 'https://bitjita.com';
     this.userProfileUpdater = new UserProfileUpdater();
     this.lastProfileUpdate = null;
@@ -251,6 +251,7 @@ class BitjitaScraper {
       // Return sample data on error for testing
       const sampleItems = [
         {
+          id: `${this.settlementId}-sample-1`,
           item_name: 'Iron Ore',
           tier: 1,
           rarity: 'common',
@@ -258,6 +259,7 @@ class BitjitaScraper {
           container_name: 'Storage Chest A',
         },
         {
+          id: `${this.settlementId}-sample-2`,
           item_name: 'Coal',
           tier: 1,
           rarity: 'common',
@@ -265,6 +267,7 @@ class BitjitaScraper {
           container_name: 'Storage Chest A',
         },
         {
+          id: `${this.settlementId}-sample-3`,
           item_name: 'Copper Ore',
           tier: 1,
           rarity: 'common',
@@ -272,6 +275,7 @@ class BitjitaScraper {
           container_name: 'Storage Chest B',
         },
         {
+          id: `${this.settlementId}-sample-4`,
           item_name: 'Steel Ingot',
           tier: 2,
           rarity: 'uncommon',
@@ -279,6 +283,7 @@ class BitjitaScraper {
           container_name: 'Storage Chest B',
         },
         {
+          id: `${this.settlementId}-sample-5`,
           item_name: 'Diamond',
           tier: 4,
           rarity: 'rare',
@@ -286,6 +291,7 @@ class BitjitaScraper {
           container_name: 'Vault',
         },
         {
+          id: `${this.settlementId}-sample-6`,
           item_name: 'Mythril Ore',
           tier: 5,
           rarity: 'epic',
@@ -547,11 +553,11 @@ class BitjitaScraper {
         return;
       }
 
-      // Clear existing inventory data
+      // Clear existing inventory data for this settlement
       const { error: deleteError } = await supabase
         .from('settlement_inventory')
         .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+        .eq('settlement_id', this.settlementId);
 
       if (deleteError) {
         console.error('Error clearing inventory:', deleteError);
@@ -568,6 +574,7 @@ class BitjitaScraper {
           .insert(
             batch.map((item) => ({
               ...item,
+              settlement_id: this.settlementId,
               updated_at: new Date().toISOString(),
             })),
           );
@@ -593,20 +600,21 @@ class BitjitaScraper {
         return;
       }
 
-      // Upsert members data
+      // Upsert members data with correct conflict resolution
       for (const member of members) {
         const { error } = await supabase.from('settlement_members').upsert(
           {
-            player_name: member.player_name,
+            player: member.player_name,
             is_online: member.is_online,
             role: member.role,
             can_invite: member.can_invite,
             can_kick: member.can_kick,
             last_seen: member.last_seen?.toISOString(),
+            settlement_id: this.settlementId,
             updated_at: new Date().toISOString(),
           },
           {
-            onConflict: 'player_name',
+            onConflict: 'settlement_id,player',
           },
         );
 
@@ -628,11 +636,11 @@ class BitjitaScraper {
         return;
       }
 
-      // Clear existing skills data
+      // Clear existing skills data for this settlement
       const { error: deleteError } = await supabase
         .from('settlement_skills')
         .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+        .eq('settlement_id', this.settlementId);
 
       if (deleteError) {
         console.error('Error clearing skills:', deleteError);
@@ -649,6 +657,7 @@ class BitjitaScraper {
           .insert(
             batch.map((skill) => ({
               ...skill,
+              settlement_id: this.settlementId,
               updated_at: new Date().toISOString(),
             })),
           );
@@ -699,21 +708,23 @@ class BitjitaScraper {
   async updateUserProfilesIfNeeded() {
     try {
       const now = new Date();
-      
+
       // Check if enough time has passed since last profile update
-      if (this.lastProfileUpdate && 
-          (now - this.lastProfileUpdate) / (1000 * 60) < this.profileUpdateInterval) {
+      if (
+        this.lastProfileUpdate &&
+        (now - this.lastProfileUpdate) / (1000 * 60) <
+          this.profileUpdateInterval
+      ) {
         return; // Not time yet
       }
 
       console.log('\n🔄 Running user profile updates...');
-      
+
       // Update stale profiles (profiles older than 24 hours)
       await this.userProfileUpdater.updateStaleProfiles(24);
-      
+
       this.lastProfileUpdate = now;
       console.log('✅ User profile updates completed\n');
-      
     } catch (error) {
       console.error('Error updating user profiles:', error);
     }
@@ -725,7 +736,9 @@ class BitjitaScraper {
     );
     console.log(`Settlement ID: ${this.settlementId}`);
     console.log(`Supabase URL: ${supabaseUrl}`);
-    console.log(`Profile update interval: ${this.profileUpdateInterval} minutes`);
+    console.log(
+      `Profile update interval: ${this.profileUpdateInterval} minutes`,
+    );
 
     // Run initial scrape
     this.scrapeAndUpdate();
@@ -741,5 +754,6 @@ class BitjitaScraper {
 }
 
 // Start the scraper
-const scraper = new BitjitaScraper();
+const defaultSettlementId = process.env.SETTLEMENT_ID || '144115188105096768'; // Default to Gloomhaven
+const scraper = new BitjitaScraper(defaultSettlementId);
 scraper.startPeriodicScraping(1); // Scrape every minute
