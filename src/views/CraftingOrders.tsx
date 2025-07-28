@@ -489,7 +489,11 @@ export function CraftingOrders() {
       </Stack>
 
       {/* New Order Modal */}
-      <CraftingOrderModal opened={modalOpened} onClose={closeModal} />
+      <CraftingOrderModal
+        opened={modalOpened}
+        onClose={closeModal}
+        onSuccess={refetchOrders}
+      />
     </Container>
   );
 }
