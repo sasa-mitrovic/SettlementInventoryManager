@@ -206,13 +206,13 @@ export function Dashboard() {
                   <Group gap="md">
                     <Text size="sm" c="dimmed">
                       <Text component="span" fw={600} c="orange">
-                        {counts.open}
+                        {counts.unassigned}
                       </Text>{' '}
                       Open
                     </Text>
                     <Text size="sm" c="dimmed">
                       <Text component="span" fw={600} c="blue">
-                        {counts.in_progress}
+                        {counts.assigned}
                       </Text>{' '}
                       In Progress
                     </Text>

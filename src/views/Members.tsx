@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Container,
   Title,
@@ -24,7 +24,7 @@ import {
   IconSelector,
 } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
-import { supabaseClient } from '../supabase/supabaseClient';
+import { useSettlement } from '../contexts/SettlementContext_simple';
 import { PermissionGate } from '../components/PermissionGate';
 
 interface SettlementMember {
@@ -77,6 +77,7 @@ interface SortState {
 }
 
 export function Members() {
+  const { currentSettlement } = useSettlement();
   const [members, setMembers] = useState<SettlementMember[]>([]);
   const [skills, setSkills] = useState<SettlementSkill[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,37 +89,119 @@ export function Members() {
     direction: 'asc',
   });
 
-  const fetchMembers = async () => {
-    try {
-      const { data: membersData, error: membersError } = await supabaseClient
-        .from('settlement_members')
-        .select('*')
-        .order('player', { ascending: true });
-
-      if (membersError) throw membersError;
-      setMembers(membersData || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch members');
-    }
-  };
-
-  const fetchSkills = async () => {
-    try {
-      const { data: skillsData, error: skillsError } = await supabaseClient
-        .from('settlement_skills')
-        .select('*')
-        .order('username', { ascending: true });
-
-      if (skillsError) throw skillsError;
-      setSkills(skillsData || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch skills');
-    }
-  };
+  // Define skill names mapping
+  const skillNames: { [key: number]: string } = useMemo(() => ({
+    2: 'Forestry',
+    3: 'Carpentry',
+    4: 'Masonry',
+    5: 'Mining',
+    6: 'Smithing',
+    7: 'Scholar',
+    8: 'Leatherworking',
+    9: 'Hunting',
+    10: 'Tailoring',
+    11: 'Farming',
+    12: 'Fishing',
+    13: 'Cooking',
+    14: 'Foraging',
+    15: 'Construction',
+    17: 'Taming',
+    18: 'Slayer',
+    19: 'Merchanting',
+    21: 'Sailing',
+  }), []);
 
   const refreshData = async () => {
+    if (!currentSettlement) {
+      setError('No settlement selected');
+      return;
+    }
+
     setRefreshing(true);
-    await Promise.all([fetchMembers(), fetchSkills()]);
+    
+    try {
+      // Fetch both members and skills data in parallel
+      const [membersResponse, skillsResponse] = await Promise.all([
+        fetch(`/api/bitjita-proxy?endpoint=claims/${currentSettlement.entityId}/members`),
+        fetch(`/api/bitjita-proxy?endpoint=claims/${currentSettlement.entityId}/citizens`)
+      ]);
+
+      // Process members data
+      if (!membersResponse.ok) {
+        throw new Error(`Failed to fetch members: ${membersResponse.status} ${membersResponse.statusText}`);
+      }
+      
+      const membersData = await membersResponse.json();
+      
+      // Transform the Bitjita API data to match our interface
+      const transformedMembers: SettlementMember[] = membersData.members?.map((member: unknown, index: number) => {
+        const memberData = member as Record<string, unknown>;
+        return {
+          id: (memberData.entityId || memberData.id || `member-${index}`) as string,
+          player: (memberData.username || memberData.name || memberData.player || 'Unknown Player') as string,
+          storage: Boolean((memberData.permissions as Record<string, unknown>)?.inventoryPermission === 1 || memberData.storage),
+          build: Boolean((memberData.permissions as Record<string, unknown>)?.buildPermission === 1 || memberData.build),
+          officer: Boolean((memberData.permissions as Record<string, unknown>)?.officerPermission === 1 || memberData.officer),
+          co_owner: Boolean((memberData.permissions as Record<string, unknown>)?.coOwnerPermission === 1 || memberData.co_owner),
+          is_online: Boolean(memberData.isOnline || memberData.is_online),
+          role: (memberData.role || 'member') as string,
+          last_seen: (memberData.lastLoginTimestamp || memberData.last_seen || null) as string | null,
+          created_at: (memberData.createdAt || new Date().toISOString()) as string,
+          updated_at: (memberData.updatedAt || new Date().toISOString()) as string,
+        };
+      }) || [];
+      
+      setMembers(transformedMembers);
+
+      // Process skills data
+      if (skillsResponse.ok) {
+        const skillsData = await skillsResponse.json();
+        
+        const transformedSkills: SettlementSkill[] = [];
+        
+        skillsData.citizens?.forEach((citizen: unknown) => {
+          const citizenData = citizen as Record<string, unknown>;
+          const skills = citizenData.skills as Record<string, number> || {};
+          const username = citizenData.userName as string;
+          const entityId = citizenData.entityId as string;
+          const totalXP = citizenData.totalXP as number || 0;
+          const highestLevel = citizenData.highestLevel as number || 0;
+          const totalLevel = citizenData.totalLevel as number || 0;
+          const totalSkills = citizenData.totalSkills as number || 0;
+          
+          // Create individual skill records for each skill the citizen has
+          Object.entries(skills).forEach(([skillIdStr, skillLevel]) => {
+            const skillId = parseInt(skillIdStr, 10);
+            transformedSkills.push({
+              id: `${entityId}-${skillId}`,
+              player_name: username,
+              username: username,
+              skill_name: skillNames[skillId] || `Skill ${skillId}`,
+              skill_level: skillLevel,
+              skill_xp: null, // Not provided by API
+              player_id: entityId,
+              skill_id: skillId,
+              total_skills: totalSkills,
+              highest_level: highestLevel,
+              total_level: totalLevel,
+              total_xp: totalXP,
+            });
+          });
+        });
+        
+        setSkills(transformedSkills);
+        console.log('Refreshed skills:', transformedSkills);
+      } else {
+        console.warn('Failed to fetch skills data, keeping skills empty');
+        setSkills([]);
+      }
+      
+      console.log('Refreshed members:', transformedMembers);
+    } catch (err) {
+      console.error('Error refreshing data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to refresh data');
+    }
+    
     setRefreshing(false);
   };
 
@@ -145,8 +228,8 @@ export function Members() {
     if (!sortState.field) return members;
 
     return [...members].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
+      let aValue: string | number;
+      let bValue: string | number;
 
       switch (sortState.field) {
         case 'player':
@@ -182,21 +265,25 @@ export function Members() {
         return sortState.direction === 'asc' ? result : -result;
       }
 
-      const result = aValue - bValue;
-      return sortState.direction === 'asc' ? result : -result;
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        const result = aValue - bValue;
+        return sortState.direction === 'asc' ? result : -result;
+      }
+
+      return 0;
     });
   };
 
   const sortSkillsData = (
     playerNames: string[],
-    playerInfo: any,
-    playerSkills: any,
+    playerInfo: Record<string, { totalXp: number; highestLevel: number; totalLevel: number }>,
+    playerSkills: Record<string, Record<number, number>>,
   ) => {
     if (!sortState.field) return playerNames;
 
     return [...playerNames].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
+      let aValue: string | number;
+      let bValue: string | number;
 
       switch (sortState.field) {
         case 'player':
@@ -215,18 +302,17 @@ export function Members() {
           aValue = playerInfo[a]?.totalLevel || 0;
           bValue = playerInfo[b]?.totalLevel || 0;
           break;
-        default:
-          // Handle dynamic skill columns (skill IDs)
-          if (
-            typeof sortState.field === 'string' &&
-            /^\d+$/.test(sortState.field)
-          ) {
-            const skillId = sortState.field;
+        default: {
+          // Handle skill-specific columns (skill IDs as strings)
+          const skillId = parseInt(sortState.field as string, 10);
+          if (!isNaN(skillId)) {
             aValue = playerSkills[a]?.[skillId] || 0;
             bValue = playerSkills[b]?.[skillId] || 0;
           } else {
             return 0;
           }
+          break;
+        }
       }
 
       if (typeof aValue === 'string' && typeof bValue === 'string') {
@@ -234,8 +320,12 @@ export function Members() {
         return sortState.direction === 'asc' ? result : -result;
       }
 
-      const result = aValue - bValue;
-      return sortState.direction === 'asc' ? result : -result;
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        const result = aValue - bValue;
+        return sortState.direction === 'asc' ? result : -result;
+      }
+
+      return 0;
     });
   };
 
@@ -258,39 +348,122 @@ export function Members() {
   );
 
   useEffect(() => {
+    const fetchMembers = async () => {
+      if (!currentSettlement) {
+        setError('No settlement selected');
+        return;
+      }
+
+      try {
+        // Use the Bitjita API endpoint via backend proxy
+        const membersUrl = `/api/bitjita-proxy?endpoint=claims/${currentSettlement.entityId}/members`;
+        
+        const response = await fetch(membersUrl);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch members: ${response.status} ${response.statusText}`);
+        }
+        
+        const membersData = await response.json();
+        
+        // Transform the Bitjita API data to match our interface
+        const transformedMembers: SettlementMember[] = membersData.members?.map((member: unknown) => {
+          const memberData = member as Record<string, unknown>;
+          return {
+            id: memberData.entityId,
+            player: memberData.userName,
+            storage: memberData.inventoryPermission === 1 ? true : false,
+            build: memberData.buildPermission === 1 ? true : false,
+            officer: memberData.officerPermission === 1 ? true : false,
+            co_owner: memberData.coOwnerPermission === 1 ? true : false,
+            is_online: Boolean(memberData.isOnline || memberData.is_online),
+            role: (memberData.role || 'member') as string,
+            last_seen: (memberData.lastLoginTimestamp) as string | null,
+            created_at: (memberData.createdAt) as string,
+            updated_at: (memberData.updatedAt) as string,
+          };
+        }) || [];
+        
+        setMembers(transformedMembers);
+      } catch (err) {
+        console.error('Error fetching members:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch members');
+      }
+    };
+
+    const fetchSkills = async () => {
+      if (!currentSettlement) {
+        return;
+      }
+
+      try {
+        // Use the Bitjita API endpoint for citizens/skills data via backend proxy
+        const skillsUrl = `/api/bitjita-proxy?endpoint=claims/${currentSettlement.entityId}/citizens`;
+        
+        const response = await fetch(skillsUrl);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch skills: ${response.status} ${response.statusText}`);
+        }
+        
+        const skillsData = await response.json();
+        
+        // Transform the Bitjita API citizens data to match our SettlementSkill interface
+        const transformedSkills: SettlementSkill[] = [];
+        
+        skillsData.citizens?.forEach((citizen: unknown) => {
+          const citizenData = citizen as Record<string, unknown>;
+          const skills = citizenData.skills as Record<string, number> || {};
+          const username = citizenData.userName as string;
+          const entityId = citizenData.entityId as string;
+          const totalXP = citizenData.totalXP as number || 0;
+          const highestLevel = citizenData.highestLevel as number || 0;
+          const totalLevel = citizenData.totalLevel as number || 0;
+          const totalSkills = citizenData.totalSkills as number || 0;
+          
+          // Create individual skill records for each skill the citizen has
+          Object.entries(skills).forEach(([skillIdStr, skillLevel]) => {
+            const skillId = parseInt(skillIdStr, 10);
+            transformedSkills.push({
+              id: `${entityId}-${skillId}`,
+              player_name: username,
+              username: username,
+              skill_name: skillNames[skillId] || `Skill ${skillId}`,
+              skill_level: skillLevel,
+              skill_xp: null, // Not provided by API
+              player_id: entityId,
+              skill_id: skillId,
+              total_skills: totalSkills,
+              highest_level: highestLevel,
+              total_level: totalLevel,
+              total_xp: totalXP,
+            });
+          });
+        });
+        
+        setSkills(transformedSkills);
+      } catch (err) {
+        console.error('Error fetching skills:', err);
+        // Don't set error for skills since it's optional data
+      }
+    };
+
     const loadData = async () => {
+      if (!currentSettlement) {
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
       await Promise.all([fetchMembers(), fetchSkills()]);
       setLoading(false);
     };
     loadData();
-  }, []);
+  }, [currentSettlement, skillNames]);
 
   const formatLastSeen = (lastSeen: string | null) => {
     if (!lastSeen) return 'Never';
     return new Date(lastSeen).toLocaleString();
-  };
-
-  // Define skill names mapping
-  const skillNames: { [key: number]: string } = {
-    2: 'Forestry',
-    3: 'Carpentry',
-    4: 'Masonry',
-    5: 'Mining',
-    6: 'Smithing',
-    7: 'Scholar',
-    8: 'Leatherworking',
-    9: 'Hunting',
-    10: 'Tailoring',
-    11: 'Farming',
-    12: 'Fishing',
-    13: 'Cooking',
-    14: 'Foraging',
-    15: 'Construction',
-    17: 'Taming',
-    18: 'Slayer',
-    19: 'Merchanting',
-    21: 'Sailing',
   };
 
   const createSkillsMatrix = () => {

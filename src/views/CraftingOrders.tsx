@@ -474,8 +474,8 @@ export function CraftingOrders() {
       [],
     );
 
-    return uniqueItems.map((item: UnifiedItem, index: number) => ({
-      value: `${item.id}_${item.type}_${index}`, // Make value unique by combining id, type, and index
+    return uniqueItems.map((item: UnifiedItem) => ({
+      value: `${item.id}`, // Make value unique by using id
       label: `${item.name} (${item.tier || 'Unknown'})`,
       item: item, // Store full item for rendering
       originalId: item.id, // Store original ID for form submission
@@ -707,7 +707,7 @@ export function CraftingOrders() {
                   itemsLoading ? 'Loading...' : 'No items found'
                 }
                 renderOption={({ option }) => {
-                  const item = (option as any).item;
+                  const item = itemSelectData.find(data => data.value === option.value)?.item;
                   return (
                     <Group gap="xs">
                       <div>

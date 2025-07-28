@@ -3,8 +3,8 @@ import { useSettlement } from '../contexts/SettlementContext_simple';
 import { supabaseClient } from '../supabase/supabaseClient';
 
 export interface SettlementCraftingOrderCounts {
-  open: number;
-  in_progress: number;
+  unassigned: number;
+  assigned: number;
   completed: number;
   total: number;
 }
@@ -12,8 +12,8 @@ export interface SettlementCraftingOrderCounts {
 export function useSettlementCraftingOrderCounts() {
   const { currentSettlement } = useSettlement();
   const [counts, setCounts] = useState<SettlementCraftingOrderCounts>({
-    open: 0,
-    in_progress: 0,
+    unassigned: 0,
+    assigned: 0,
     completed: 0,
     total: 0,
   });
@@ -23,7 +23,7 @@ export function useSettlementCraftingOrderCounts() {
   useEffect(() => {
     async function fetchCounts() {
       if (!currentSettlement?.entityId) {
-        setCounts({ open: 0, in_progress: 0, completed: 0, total: 0 });
+        setCounts({ unassigned: 0, assigned: 0, completed: 0, total: 0 });
         setLoading(false);
         return;
       }
@@ -45,11 +45,11 @@ export function useSettlementCraftingOrderCounts() {
         const statusCounts = data.reduce(
           (acc, order) => {
             switch (order.status) {
-              case 'open':
-                acc.open++;
+              case 'unassigned':
+                acc.unassigned++;
                 break;
-              case 'in_progress':
-                acc.in_progress++;
+              case 'assigned':
+                acc.assigned++;
                 break;
               case 'completed':
                 acc.completed++;
@@ -58,14 +58,14 @@ export function useSettlementCraftingOrderCounts() {
             acc.total++;
             return acc;
           },
-          { open: 0, in_progress: 0, completed: 0, total: 0 },
+          { unassigned: 0, assigned: 0, completed: 0, total: 0 },
         );
 
         setCounts(statusCounts);
       } catch (err) {
         console.error('Failed to fetch settlement crafting order counts:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch counts');
-        setCounts({ open: 0, in_progress: 0, completed: 0, total: 0 });
+        setCounts({ unassigned: 0, assigned: 0, completed: 0, total: 0 });
       } finally {
         setLoading(false);
       }
