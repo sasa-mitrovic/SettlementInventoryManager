@@ -88,7 +88,7 @@ export function CraftingOrderModal({
       );
       form.setFieldValue('quantity', neededQuantity);
     }
-  }, [opened, meetTarget, form]);
+  }, [opened, meetTarget]);
 
   // Initialize filtered items when allItems changes
   useEffect(() => {
@@ -108,7 +108,7 @@ export function CraftingOrderModal({
         form.setFieldValue('item_id', String(matchingItem.id));
       }
     }
-  }, [opened, preselectedItem, allItems, form]);
+  }, [opened, preselectedItem, allItems]);
 
   // Handle search with debouncing and cancellation
   const handleSearchChange = useCallback(
@@ -162,7 +162,7 @@ export function CraftingOrderModal({
         clearTimeout(filterTimeoutRef.current);
       }
     }
-  }, [form, opened]);
+  }, [opened]);
 
   const submitOrder = async (values: typeof form.values) => {
     if (!userProfile) return;
