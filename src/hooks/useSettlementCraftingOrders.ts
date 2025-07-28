@@ -32,6 +32,8 @@ export interface SettlementCraftingOrder {
     in_game_name?: string;
     email: string;
   } | null;
+  hexcoin?: number;
+  notes?: string;
 }
 
 interface UseSettlementCraftingOrdersOptions {
@@ -58,53 +60,43 @@ export function useSettlementCraftingOrders(
         settlementId,
       );
 
-      // Use the RPC function but filter by settlement_id
-      // Force a fresh call by adding a timestamp parameter (ignored by function)
-      const { data: ordersData, error: ordersError } = await supabaseClient.rpc(
-        'get_crafting_orders_with_names',
-        {}, // Empty params, but this forces a fresh call
-      );
+      // Use direct table query instead of RPC to include all columns including hexcoin and notes
+      const { data: ordersData, error: ordersError } = await supabaseClient
+        .from('crafting_orders')
+        .select(
+          `
+          *,
+          placed_by_profile:user_profiles!placed_by(in_game_name, email),
+          claimed_by_profile:user_profiles!claimed_by(in_game_name, email),
+          completed_by_profile:user_profiles!completed_by(in_game_name, email)
+        `,
+        )
+        .eq('settlement_id', settlementId);
 
       if (ordersError) {
-        console.error('❌ [CraftingOrders] RPC error:', ordersError);
+        console.error('❌ [CraftingOrders] Query error:', ordersError);
         throw ordersError;
       }
 
       console.log(
-        '✅ [CraftingOrders] Total orders from RPC:',
+        '✅ [CraftingOrders] Orders fetched for settlement:',
         ordersData?.length || 0,
       );
 
-      // Filter by settlement_id and transform the data
-      const settlementSpecificOrders =
-        ordersData
-          ?.filter((order: any) => {
-            return order.settlement_id === settlementId;
-          })
-          ?.map((order: any) => ({
-            ...order,
-            // Create profile objects for compatibility
-            placed_by_profile: order.placed_by_name
-              ? {
-                  in_game_name: order.placed_by_name,
-                  email: order.placed_by_name,
-                }
-              : null,
-            claimed_by_profile: order.claimed_by_name
-              ? {
-                  in_game_name: order.claimed_by_name,
-                  email: order.claimed_by_name,
-                }
-              : null,
-            completed_by_profile: order.completed_by_name
-              ? {
-                  in_game_name: order.completed_by_name,
-                  email: order.completed_by_name,
-                }
-              : null,
-          })) || [];
-
-      setData(settlementSpecificOrders);
+      // Transform the data to match our interface
+      const transformedOrders =
+        ordersData?.map((order) => ({
+          ...order,
+          // Ensure hexcoin and notes are included (should now be available from direct table query)
+          hexcoin: order.hexcoin || 0,
+          notes: order.notes || '',
+          // Extract profile names from the joined user_profiles data
+          placed_by_name: order.placed_by_profile?.in_game_name || null,
+          claimed_by_name: order.claimed_by_profile?.in_game_name || null,
+          completed_by_name: order.completed_by_profile?.in_game_name || null,
+        })) || [];
+      console.log('Transformed Orders:', transformedOrders);
+      setData(transformedOrders);
     } catch (err) {
       console.error('Failed to fetch settlement crafting orders:', err);
       setError(
