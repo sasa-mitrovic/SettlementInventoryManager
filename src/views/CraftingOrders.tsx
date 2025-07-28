@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState } from 'react';
 import {
   Container,
   Title,
@@ -13,13 +13,10 @@ import {
   Paper,
   Badge,
   Switch,
-  Modal,
-  NumberInput,
-  Select,
   Avatar,
+  Tooltip,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { useForm } from '@mantine/form';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
@@ -28,22 +25,21 @@ import {
   IconCheck,
   IconX,
   IconUserMinus,
+  IconFileText,
 } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
-import { useUnifiedItems, UnifiedItem } from '../services/unifiedItemService';
-import { useSettlement } from '../contexts/SettlementContext_simple';
 import {
   useSettlementCraftingOrders,
   SettlementCraftingOrder,
 } from '../hooks/useSettlementCraftingOrders';
+import { CraftingOrderModal } from '../components/CraftingOrderModal';
 
 // Use the SettlementCraftingOrder interface from the hook
 type CraftingOrder = SettlementCraftingOrder;
 
 export function CraftingOrders() {
-  const { currentSettlement } = useSettlement();
   const {
     data: orders,
     loading: ordersLoading,
@@ -58,114 +54,7 @@ export function CraftingOrders() {
   const [modalOpened, { open: openModal, close: closeModal }] =
     useDisclosure(false);
 
-  // Use the unified items service
-  const {
-    items: allItems,
-    loading: itemsLoading,
-    isCacheValid,
-  } = useUnifiedItems();
-
-  const [filteredItems, setFilteredItems] = useState<UnifiedItem[]>([]);
-  const [searchValue, setSearchValue] = useState('');
-  const filterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Initialize filtered items when allItems changes
-  useEffect(() => {
-    if (allItems && allItems.length > 0) {
-      console.log('🔍 [CraftingOrders] Total items loaded:', allItems.length);
-      const itemsByType = allItems.reduce(
-        (acc, item) => {
-          acc[item.type] = (acc[item.type] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>,
-      );
-      console.log('📊 [CraftingOrders] Items by type:', itemsByType);
-      console.log('📦 [CraftingOrders] Sample items:', allItems.slice(0, 5));
-      setFilteredItems(allItems.slice(0, 50));
-    }
-  }, [allItems]);
-
-  // Handle search with debouncing and cancellation
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      setSearchValue(value);
-
-      // Clear any pending filter operation
-      if (filterTimeoutRef.current) {
-        clearTimeout(filterTimeoutRef.current);
-      }
-
-      // Only proceed if items are available
-      if (!allItems || allItems.length === 0 || itemsLoading) return;
-
-      // Debounce the filtering with a very short delay
-      filterTimeoutRef.current = setTimeout(() => {
-        if (!value.trim()) {
-          console.log('🔍 [CraftingOrders] Showing all items (first 50)');
-          setFilteredItems(allItems.slice(0, 50));
-        } else {
-          const searchLower = value.toLowerCase();
-          console.log('🔍 [CraftingOrders] Searching for:', searchLower);
-          const filtered = allItems.filter(
-            (item: UnifiedItem) =>
-              item.name.toLowerCase().includes(searchLower) &&
-              !item.name.endsWith('Output'),
-          );
-          console.log(
-            '📝 [CraftingOrders] Search results:',
-            filtered.length,
-            'items found',
-          );
-          console.log(
-            '📦 [CraftingOrders] Sample search results:',
-            filtered.slice(0, 3),
-          );
-          setFilteredItems(filtered);
-        }
-      }, 50); // Very short 50ms debounce
-    },
-    [allItems, itemsLoading],
-  );
-
-  // Handle modal close
-  const handleCloseModal = () => {
-    // Clear any pending filter operation
-    if (filterTimeoutRef.current) {
-      clearTimeout(filterTimeoutRef.current);
-    }
-    closeModal();
-  };
-
   const { userProfile } = useOptimizedUserWithProfile();
-
-  const sectorOptions = [
-    { value: 'Forest&Wood', label: 'Forest & Wood' },
-    { value: 'Earth&Ore', label: 'Earth & Ore' },
-    { value: 'Wild&Hide', label: 'Wild & Hide' },
-    { value: 'Fields&Cloth', label: 'Fields & Cloth' },
-    { value: 'Waters&Meals', label: 'Waters & Meals' },
-    { value: 'Lore&Trade', label: 'Lore & Trade' },
-    { value: 'SlayerSquad', label: 'Slayer Squad' },
-  ];
-
-  const form = useForm({
-    initialValues: {
-      item_id: '',
-      quantity: 1,
-      sector: '',
-    },
-    validate: {
-      item_id: (value) => (!value ? 'Please select an item' : null),
-      quantity: (value) =>
-        value < 1
-          ? 'Quantity must be at least 1'
-          : value > 1000
-            ? 'Quantity cannot exceed 1000'
-            : null,
-      sector: (value) => (!value ? 'Please select a sector' : null),
-    },
-  });
 
   const claimOrder = async (orderId: string) => {
     if (!userProfile) return;
@@ -357,58 +246,6 @@ export function CraftingOrders() {
     });
   };
 
-  const submitOrder = async (values: typeof form.values) => {
-    if (!userProfile) return;
-
-    // Find the selected item using the new unique value format
-    const selectedOption = itemSelectData.find(
-      (option) => option.value === values.item_id,
-    );
-    const selectedItem = selectedOption?.item;
-
-    if (!selectedItem) {
-      notifications.show({
-        title: 'Error',
-        message:
-          'Selected item could not be found. Please try selecting the item again.',
-        color: 'red',
-      });
-      return;
-    }
-
-    try {
-      const { error } = await supabaseClient.from('crafting_orders').insert({
-        item_id: parseInt(selectedItem.id), // Convert string back to number for database
-        item_name: selectedItem.name,
-        item_icon: selectedItem.iconAssetName,
-        item_tier: selectedItem.tier,
-        quantity: values.quantity,
-        sector: values.sector,
-        placed_by: userProfile.id,
-        settlement_id: currentSettlement?.entityId,
-        status: 'unassigned',
-      });
-
-      if (error) throw error;
-
-      notifications.show({
-        title: 'Order Created',
-        message: `Successfully created order for ${selectedItem.name} (x${values.quantity})`,
-        color: 'green',
-      });
-
-      form.reset();
-      handleCloseModal();
-      await refetchOrders();
-    } catch (err) {
-      notifications.show({
-        title: 'Create Failed',
-        message: err instanceof Error ? err.message : 'Failed to create order',
-        color: 'red',
-      });
-    }
-  };
-
   const canCompleteOrder = (order: CraftingOrder) => {
     if (!userProfile) return false;
     return (
@@ -446,47 +283,6 @@ export function CraftingOrders() {
   const filteredOrders = orders.filter((order) =>
     showCompleted ? order.status === 'completed' : order.status !== 'completed',
   );
-
-  const itemSelectData = useMemo(() => {
-    let selectItems = filteredItems;
-
-    // If we have a selected item that's not in the current items list, add it
-    const selectedItemId = form.values.item_id;
-    if (
-      selectedItemId &&
-      !filteredItems.find((item) => item.id === selectedItemId)
-    ) {
-      const selectedItem = allItems.find((item) => item.id === selectedItemId);
-      if (selectedItem) {
-        selectItems = [selectedItem, ...filteredItems];
-      }
-    }
-
-    // Remove duplicates by ID to avoid Mantine Select error
-    const uniqueItems = selectItems.reduce(
-      (acc: UnifiedItem[], current: UnifiedItem) => {
-        const existingItem = acc.find((item) => item.id === current.id);
-        if (!existingItem) {
-          acc.push(current);
-        }
-        return acc;
-      },
-      [],
-    );
-
-    return uniqueItems.map((item: UnifiedItem) => ({
-      value: `${item.id}`, // Make value unique by using id
-      label: `${item.name} (${item.tier || 'Unknown'})`,
-      item: item, // Store full item for rendering
-      originalId: item.id, // Store original ID for form submission
-    }));
-  }, [filteredItems, allItems, form.values.item_id]);
-
-  // Remove the problematic useEffect that was causing infinite API calls
-  // The hook already handles fetching orders when currentSettlement changes
-
-  // Display any item loading errors
-  // Remove error handling as unified service handles errors internally
 
   if (ordersLoading) {
     return (
@@ -538,23 +334,26 @@ export function CraftingOrders() {
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Order Date</Table.Th>
-                <Table.Th>Sector</Table.Th>
-                <Table.Th>Item</Table.Th>
-                <Table.Th>Quantity</Table.Th>
-                <Table.Th>Placed By</Table.Th>
-                <Table.Th>Claimed By</Table.Th>
-                <Table.Th>Status</Table.Th>
-                <Table.Th>Actions</Table.Th>
+                <Table.Th ta="center">Reward</Table.Th>
+                <Table.Th ta="center">Order Date</Table.Th>
+                <Table.Th ta="center">Sector</Table.Th>
+                <Table.Th ta="center">Item</Table.Th>
+                <Table.Th ta="center">Quantity</Table.Th>
+                <Table.Th ta="center">Placed By</Table.Th>
+                <Table.Th ta="center">Claimed By</Table.Th>
+                <Table.Th ta="center">Status</Table.Th>
+                <Table.Th ta="center">Actions</Table.Th>
+                <Table.Th ta="center">Notes</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {filteredOrders.map((order) => (
                 <Table.Tr key={order.id}>
-                  <Table.Td>
+                  <Table.Td ta="center">{order.hexcoin}</Table.Td>
+                  <Table.Td ta="center">
                     {new Date(order.created_at).toLocaleDateString()}
                   </Table.Td>
-                  <Table.Td>{order.sector || 'N/A'}</Table.Td>
+                  <Table.Td ta="center">{order.sector || 'N/A'}</Table.Td>
                   <Table.Td>
                     <Group gap="xs">
                       {order.item_icon && (
@@ -570,13 +369,13 @@ export function CraftingOrders() {
                       </div>
                     </Group>
                   </Table.Td>
-                  <Table.Td>
+                  <Table.Td ta="center">
                     <Text fw={500}>{order.quantity}</Text>
                   </Table.Td>
-                  <Table.Td>
+                  <Table.Td ta="center">
                     {formatUserName(order.placed_by_profile || undefined)}
                   </Table.Td>
-                  <Table.Td>
+                  <Table.Td ta="center">
                     {order.status === 'unassigned' ? (
                       <Button
                         size="xs"
@@ -588,7 +387,7 @@ export function CraftingOrders() {
                         Claim Order
                       </Button>
                     ) : order.claimed_by_profile ? (
-                      <Group gap="xs">
+                      <Group gap="xs" justify="center">
                         <Text>
                           {formatUserName(
                             order.claimed_by_profile || undefined,
@@ -612,14 +411,14 @@ export function CraftingOrders() {
                       'N/A'
                     )}
                   </Table.Td>
-                  <Table.Td>
+                  <Table.Td ta="center">
                     <Badge color={getStatusBadgeColor(order.status)} size="sm">
                       {order.status.charAt(0).toUpperCase() +
                         order.status.slice(1)}
                     </Badge>
                   </Table.Td>
-                  <Table.Td>
-                    <Group gap="xs">
+                  <Table.Td ta="center">
+                    <Group gap="xs" justify="center">
                       {order.status !== 'completed' &&
                         canCompleteOrder(order) && (
                           <Button
@@ -648,6 +447,23 @@ export function CraftingOrders() {
                         )}
                     </Group>
                   </Table.Td>
+                  <Table.Td ta="center">
+                    {order.notes ? (
+                      <Tooltip label={order.notes} multiline maw={300}>
+                        <IconFileText
+                          size={16}
+                          style={{
+                            cursor: 'pointer',
+                            color: 'var(--mantine-color-blue-6)',
+                          }}
+                        />
+                      </Tooltip>
+                    ) : (
+                      <Text size="sm" c="dimmed">
+                        -
+                      </Text>
+                    )}
+                  </Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>
@@ -673,80 +489,7 @@ export function CraftingOrders() {
       </Stack>
 
       {/* New Order Modal */}
-      <Modal
-        opened={modalOpened}
-        onClose={handleCloseModal}
-        title="Create New Crafting Order"
-        size="md"
-      >
-        <form onSubmit={form.onSubmit(submitOrder)}>
-          <Stack gap="md">
-            <div>
-              <Group justify="space-between" mb="xs">
-                <Text fw={500} size="sm">
-                  Select Item
-                </Text>
-                {isCacheValid ? (
-                  <Badge size="xs" color="green" variant="light">
-                    Items & Cargos Cached
-                  </Badge>
-                ) : (
-                  <Badge size="xs" color="gray" variant="light">
-                    Loading...
-                  </Badge>
-                )}
-              </Group>
-              <Select
-                placeholder="Choose an item to craft"
-                data={itemSelectData}
-                searchable
-                searchValue={searchValue}
-                onSearchChange={handleSearchChange}
-                disabled={itemsLoading}
-                nothingFoundMessage={
-                  itemsLoading ? 'Loading...' : 'No items found'
-                }
-                renderOption={({ option }) => {
-                  const item = itemSelectData.find(data => data.value === option.value)?.item;
-                  return (
-                    <Group gap="xs">
-                      <div>
-                        <Text>{item?.name || 'Unknown Item'}</Text>
-                        <Text size="xs" c="dimmed">
-                          T{item?.tier || 'Unknown'}
-                        </Text>
-                      </div>
-                    </Group>
-                  );
-                }}
-                {...form.getInputProps('item_id')}
-              />
-            </div>
-
-            <Select
-              label="Sector"
-              placeholder="Choose a sector"
-              data={sectorOptions}
-              {...form.getInputProps('sector')}
-            />
-
-            <NumberInput
-              label="Quantity"
-              placeholder="Enter quantity"
-              min={1}
-              max={1000}
-              {...form.getInputProps('quantity')}
-            />
-
-            <Group justify="flex-end" gap="sm">
-              <Button variant="light" onClick={handleCloseModal}>
-                Cancel
-              </Button>
-              <Button type="submit">Create Order</Button>
-            </Group>
-          </Stack>
-        </form>
-      </Modal>
+      <CraftingOrderModal opened={modalOpened} onClose={closeModal} />
     </Container>
   );
 }

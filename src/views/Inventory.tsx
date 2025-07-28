@@ -342,11 +342,6 @@ export function Inventory() {
     openModal();
   };
 
-  const handleModalSuccess = () => {
-    // Optionally refresh data or show success message
-    // The modal already shows success notifications
-  };
-
   const getTargetInputValue = (itemName: string, currentTarget?: number) => {
     // Return local input value if it exists, otherwise return the current target
     return targetInputs[itemName] !== undefined
@@ -1043,7 +1038,6 @@ export function Inventory() {
         <CraftingOrderModal
           opened={modalOpened}
           onClose={closeModal}
-          onSuccess={handleModalSuccess}
           preselectedItem={selectedItem || undefined}
           meetTarget={selectedItemTarget || undefined}
         />

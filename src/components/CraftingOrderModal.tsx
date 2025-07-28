@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-} from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Modal,
   Stack,
@@ -14,12 +8,14 @@ import {
   Badge,
   Select,
   NumberInput,
+  TextInput,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { useOptimizedUserWithProfile } from '../supabase/loader';
 import { useUnifiedItems, UnifiedItem } from '../services/unifiedItemService';
+import { useSettlement } from '../contexts/SettlementContext_simple';
 
 interface CraftingOrderModalProps {
   opened: boolean;
@@ -39,8 +35,8 @@ export function CraftingOrderModal({
   preselectedItem,
   meetTarget,
 }: CraftingOrderModalProps) {
-  console.log('[CraftingOrderModal] Component mounted, opened:', opened);
   const { userProfile } = useOptimizedUserWithProfile();
+  const { currentSettlement } = useSettlement();
 
   // Use the unified items service
   const {
@@ -48,35 +44,6 @@ export function CraftingOrderModal({
     loading: itemsLoading,
     isCacheValid,
   } = useUnifiedItems();
-
-  console.log(
-    '[CraftingOrderModal] Unified items loaded:',
-    allItems.length,
-    'loading:',
-    itemsLoading,
-  );
-
-  // Log sample data for debugging
-  React.useEffect(() => {
-    if (allItems.length > 0) {
-      const itemTypes = allItems
-        .filter((item) => item.type === 'item')
-        .slice(0, 3);
-      const cargoTypes = allItems
-        .filter((item) => item.type === 'cargo')
-        .slice(0, 3);
-      console.log('[CraftingOrderModal] Sample items:', itemTypes);
-      console.log('[CraftingOrderModal] Sample cargos:', cargoTypes);
-
-      const leatherItems = allItems.filter((item) =>
-        item.name.toLowerCase().includes('leather'),
-      );
-      console.log(
-        `[CraftingOrderModal] Found ${leatherItems.length} leather items:`,
-        leatherItems.map((item) => ({ name: item.name, type: item.type })),
-      );
-    }
-  }, [allItems]);
 
   const [filteredItems, setFilteredItems] = useState<UnifiedItem[]>([]);
   const [searchValue, setSearchValue] = useState('');
@@ -97,6 +64,8 @@ export function CraftingOrderModal({
       item_id: '',
       quantity: 1,
       sector: '',
+      hexcoin: 0,
+      notes: '',
     },
     validate: {
       item_id: (value) => (!value ? 'Please select an item' : null),
@@ -119,7 +88,7 @@ export function CraftingOrderModal({
       );
       form.setFieldValue('quantity', neededQuantity);
     }
-  }, [opened, meetTarget]);
+  }, [opened, meetTarget, form]);
 
   // Initialize filtered items when allItems changes
   useEffect(() => {
@@ -139,7 +108,7 @@ export function CraftingOrderModal({
         form.setFieldValue('item_id', String(matchingItem.id));
       }
     }
-  }, [opened, preselectedItem, allItems]);
+  }, [opened, preselectedItem, allItems, form]);
 
   // Handle search with debouncing and cancellation
   const handleSearchChange = useCallback(
@@ -157,21 +126,13 @@ export function CraftingOrderModal({
       // Debounce the filtering with a very short delay
       filterTimeoutRef.current = setTimeout(() => {
         if (!value.trim()) {
-          console.log(
-            '[CraftingOrderModal] No search value, showing first 50 items',
-          );
           setFilteredItems(allItems.slice(0, 50));
         } else {
           const searchLower = value.toLowerCase();
-          console.log(`[CraftingOrderModal] Searching for: "${searchLower}"`);
           const filtered = allItems.filter(
             (item: UnifiedItem) =>
               item.name.toLowerCase().includes(searchLower) &&
               !item.name.endsWith('Output'),
-          );
-          console.log(
-            `[CraftingOrderModal] Found ${filtered.length} matching items:`,
-            filtered.slice(0, 5),
           );
           setFilteredItems(filtered);
         }
@@ -201,7 +162,7 @@ export function CraftingOrderModal({
         clearTimeout(filterTimeoutRef.current);
       }
     }
-  }, [opened]);
+  }, [form, opened]);
 
   const submitOrder = async (values: typeof form.values) => {
     if (!userProfile) return;
@@ -228,6 +189,9 @@ export function CraftingOrderModal({
         sector: values.sector,
         placed_by: userProfile.id,
         status: 'unassigned',
+        hexcoin: values.hexcoin || 0,
+        notes: values.notes || '',
+        settlement_id: currentSettlement?.entityId, // Ensure settlement_id is set
       });
 
       if (error) throw error;
@@ -271,11 +235,36 @@ export function CraftingOrderModal({
       }
     }
 
-    return selectItems.map((item: UnifiedItem) => ({
-      value: String(item.id),
-      label: `${item.name} (${item.tier || 'Unknown'})`,
-      item: item, // Store full item for rendering
-    }));
+    // Remove duplicates by creating a Map with item.id as key
+    const uniqueItems = new Map();
+    selectItems.forEach((item: UnifiedItem) => {
+      if (!uniqueItems.has(item.id)) {
+        uniqueItems.set(item.id, item);
+      }
+    });
+
+    const result = Array.from(uniqueItems.values()).map(
+      (item: UnifiedItem) => ({
+        value: String(item.id),
+        label: `${item.name} (${item.tier || 'Unknown'})`,
+        item: item, // Store full item for rendering
+      }),
+    );
+
+    // Debug logging to catch duplicates
+    const values = result.map((r) => r.value);
+    const duplicateValues = values.filter(
+      (value, index) => values.indexOf(value) !== index,
+    );
+    if (duplicateValues.length > 0) {
+      console.error(
+        '[CraftingOrderModal] Duplicate values detected:',
+        duplicateValues,
+      );
+      console.error('[CraftingOrderModal] Full result:', result);
+    }
+
+    return result;
   }, [filteredItems, allItems, form.values.item_id]);
 
   // Handle "Meet Target" functionality
@@ -294,7 +283,8 @@ export function CraftingOrderModal({
       opened={opened}
       onClose={handleCloseModal}
       title="Create New Crafting Order"
-      size="md"
+      size="lg"
+      centered
     >
       <form onSubmit={form.onSubmit(submitOrder)}>
         <Stack gap="md">
@@ -319,12 +309,14 @@ export function CraftingOrderModal({
               searchable
               searchValue={searchValue}
               onSearchChange={handleSearchChange}
-              disabled={itemsLoading}
+              disabled={itemsLoading || preselectedItem ? true : false}
               nothingFoundMessage={
                 itemsLoading ? 'Loading...' : 'No items found'
               }
               renderOption={({ option }) => {
-                const item = (option as any).item;
+                const item = allItems.find(
+                  (item) => String(item.id) === option.value,
+                );
                 return (
                   <Group gap="xs">
                     <div>
@@ -383,6 +375,19 @@ export function CraftingOrderModal({
               </Text>
             )}
           </div>
+
+          <NumberInput
+            label="Hexcoin Cost"
+            placeholder="Enter hexcoin cost"
+            min={0}
+            {...form.getInputProps('hexcoin')}
+          />
+
+          <TextInput
+            label="Notes"
+            placeholder="Enter any additional notes"
+            {...form.getInputProps('notes')}
+          />
 
           <Group justify="flex-end" gap="sm">
             <Button variant="light" onClick={handleCloseModal}>
