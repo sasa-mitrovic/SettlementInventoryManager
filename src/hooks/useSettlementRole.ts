@@ -31,21 +31,30 @@ export function useSettlementRole(): UseSettlementRoleResult {
       try {
         setLoading(true);
         setError(null);
+        console.log(
+          '🔍 [SettlementRole] Fetching role for user:',
+          user.id,
+          'in settlement:',
+          currentSettlement.entityId,
+        );
+
+        const params = {
+          auth_id: user.id,
+          settlement_id: currentSettlement.entityId,
+        };
 
         const { data, error: rpcError } = await supabaseClient.rpc(
           'get_user_settlement_role',
-          {
-            auth_id: user.id,
-            settlement_id: currentSettlement.entityId,
-          },
+          params,
         );
 
+        console.log('data from get_user_settlement_role:', data);
         if (rpcError) {
           console.error('Error fetching settlement role:', rpcError);
           setError(rpcError.message);
           setRoleName(null);
         } else {
-          // The function returns a table with role_name, get the first result
+          // The function returns a table with role, get the first result
           const role = data && data.length > 0 ? data[0].role_name : null;
           setRoleName(role);
         }
