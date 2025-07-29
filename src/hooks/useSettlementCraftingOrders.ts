@@ -17,23 +17,12 @@ export interface SettlementCraftingOrder {
   completed_at?: string;
   completed_by?: string;
   settlement_id: string;
-  placed_by_name?: string;
-  claimed_by_name?: string;
-  completed_by_name?: string;
-  placed_by_profile?: {
-    in_game_name?: string;
-    email: string;
-  } | null;
-  claimed_by_profile?: {
-    in_game_name?: string;
-    email: string;
-  } | null;
-  completed_by_profile?: {
-    in_game_name?: string;
-    email: string;
-  } | null;
   hexcoin?: number;
   notes?: string;
+  // User names from RPC function joins
+  placed_by_name?: string | null;
+  claimed_by_name?: string | null;
+  completed_by_name?: string | null;
 }
 
 interface UseSettlementCraftingOrdersOptions {
@@ -60,21 +49,16 @@ export function useSettlementCraftingOrders(
         settlementId,
       );
 
-      // Use direct table query instead of RPC to include all columns including hexcoin and notes
-      const { data: ordersData, error: ordersError } = await supabaseClient
-        .from('crafting_orders')
-        .select(
-          `
-          *,
-          placed_by_profile:user_profiles!placed_by(in_game_name, email),
-          claimed_by_profile:user_profiles!claimed_by(in_game_name, email),
-          completed_by_profile:user_profiles!completed_by(in_game_name, email)
-        `,
-        )
-        .eq('settlement_id', settlementId);
+      // Use RPC function to get crafting orders without profile joins
+      const { data: ordersData, error: ordersError } = await supabaseClient.rpc(
+        'get_settlement_crafting_orders',
+        {
+          p_settlement_id: settlementId,
+        },
+      );
 
       if (ordersError) {
-        console.error('❌ [CraftingOrders] Query error:', ordersError);
+        console.error('❌ [CraftingOrders] RPC error:', ordersError);
         throw ordersError;
       }
 
@@ -85,16 +69,17 @@ export function useSettlementCraftingOrders(
 
       // Transform the data to match our interface
       const transformedOrders =
-        ordersData?.map((order) => ({
+        ordersData?.map((order: SettlementCraftingOrder) => ({
           ...order,
-          // Ensure hexcoin and notes are included (should now be available from direct table query)
+          // Ensure hexcoin and notes are included
           hexcoin: order.hexcoin || 0,
           notes: order.notes || '',
-          // Extract profile names from the joined user_profiles data
-          placed_by_name: order.placed_by_profile?.in_game_name || null,
-          claimed_by_name: order.claimed_by_profile?.in_game_name || null,
-          completed_by_name: order.completed_by_profile?.in_game_name || null,
+          // Now we get the user names directly from the RPC function
+          placed_by_name: order.placed_by_name || null,
+          claimed_by_name: order.claimed_by_name || null,
+          completed_by_name: order.completed_by_name || null,
         })) || [];
+
       console.log('Transformed Orders:', transformedOrders);
       setData(transformedOrders);
     } catch (err) {
