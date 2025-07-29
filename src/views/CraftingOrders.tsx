@@ -259,14 +259,6 @@ export function CraftingOrders() {
     return order.placed_by === userProfile.id;
   };
 
-  const formatUserName = (profile?: {
-    in_game_name?: string;
-    email: string;
-  }) => {
-    if (!profile) return 'Unknown User';
-    return profile.in_game_name || profile.email;
-  };
-
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'unassigned':
@@ -373,7 +365,7 @@ export function CraftingOrders() {
                     <Text fw={500}>{order.quantity}</Text>
                   </Table.Td>
                   <Table.Td ta="center">
-                    {formatUserName(order.placed_by_profile || undefined)}
+                    {order.placed_by_name || 'Unknown User'}
                   </Table.Td>
                   <Table.Td ta="center">
                     {order.status === 'unassigned' ? (
@@ -386,13 +378,9 @@ export function CraftingOrders() {
                       >
                         Claim Order
                       </Button>
-                    ) : order.claimed_by_profile ? (
+                    ) : order.claimed_by ? (
                       <Group gap="xs" justify="center">
-                        <Text>
-                          {formatUserName(
-                            order.claimed_by_profile || undefined,
-                          )}
-                        </Text>
+                        <Text>{order.claimed_by_name}</Text>
                         {userProfile &&
                           order.claimed_by === userProfile.id &&
                           order.status !== 'completed' && (
