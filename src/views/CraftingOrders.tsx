@@ -35,6 +35,9 @@ import {
   SettlementCraftingOrder,
 } from '../hooks/useSettlementCraftingOrders';
 import { CraftingOrderModal } from '../components/CraftingOrderModal';
+import { DiscordIntegrationButton } from '../components/DiscordIntegrationButton';
+import { DiscordSetupModal } from '../components/DiscordSetupModal';
+import { DiscordOAuthSetup } from '../components/DiscordOAuthSetup';
 
 // Use the SettlementCraftingOrder interface from the hook
 type CraftingOrder = SettlementCraftingOrder;
@@ -52,6 +55,12 @@ export function CraftingOrders() {
 
   // Modal states
   const [modalOpened, { open: openModal, close: closeModal }] =
+    useDisclosure(false);
+  const [
+    discordModalOpened,
+    { open: openDiscordModal, close: closeDiscordModal },
+  ] = useDisclosure(false);
+  const [oauthModalOpened, { open: openOAuthModal, close: closeOAuthModal }] =
     useDisclosure(false);
 
   const { userProfile } = useOptimizedUserWithProfile();
@@ -303,6 +312,10 @@ export function CraftingOrders() {
           </Group>
 
           <Group>
+            <DiscordIntegrationButton
+              onManualSetupClick={openDiscordModal}
+              onOAuthSetupClick={openOAuthModal}
+            />
             <Switch
               label="Show Completed Orders"
               checked={showCompleted}
@@ -482,6 +495,19 @@ export function CraftingOrders() {
         onClose={closeModal}
         onSuccess={refetchOrders}
       />
+
+      {/* Discord Setup Modal */}
+      <DiscordSetupModal
+        opened={discordModalOpened}
+        onClose={closeDiscordModal}
+        onSuccess={() => {
+          // Optionally refresh Discord integration status
+          closeDiscordModal();
+        }}
+      />
+
+      {/* Discord OAuth Setup Modal */}
+      <DiscordOAuthSetup opened={oauthModalOpened} onClose={closeOAuthModal} />
     </Container>
   );
 }
