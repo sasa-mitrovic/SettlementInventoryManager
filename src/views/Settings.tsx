@@ -34,6 +34,7 @@ import { PermissionGate } from '../components/PermissionGate';
 import { RolePermissionManagement } from '../components/RolePermissionManagement';
 import { CacheManager } from '../components/CacheManager';
 import { usePermissionContext } from '../supabase/optimizedRoleHooks';
+import { useSettlement } from '../contexts/SettlementContext_simple';
 
 interface UserProfile {
   id: string;
@@ -70,6 +71,7 @@ export function Settings() {
   const { user: authUser, loading: authLoading, initialized } = useAuth();
   const { userProfile } = useOptimizedUserWithProfile();
   const permissionContext = usePermissionContext();
+  const { currentSettlement } = useSettlement();
 
   const fetchUsers = async () => {
     try {
@@ -80,6 +82,33 @@ export function Settings() {
 
       if (!authUser?.id) {
         throw new Error('User not authenticated');
+      }
+
+      // Check if current user is an Admin (not Super Admin) and filter by settlement members
+      let settlementMemberNames: string[] = [];
+      if (
+        userProfile?.role?.name?.toLowerCase() === 'admin' &&
+        currentSettlement
+      ) {
+        try {
+          const membersUrl = `/api/bitjita-proxy?endpoint=claims/${currentSettlement.entityId}/members`;
+          const response = await fetch(membersUrl);
+
+          if (response.ok) {
+            const membersData = await response.json();
+            settlementMemberNames =
+              membersData.members?.map((member: any) => member.userName) || [];
+            console.log(
+              'Settlement members for filtering:',
+              settlementMemberNames,
+            );
+          }
+        } catch (memberError) {
+          console.warn(
+            'Failed to fetch settlement members for filtering:',
+            memberError,
+          );
+        }
       }
 
       // Try using the admin function first
@@ -95,7 +124,7 @@ export function Settings() {
 
         if (usersData) {
           // Transform the data from the function
-          const transformedUsers = usersData.map((userData: any) => ({
+          let transformedUsers = usersData.map((userData: any) => ({
             id: userData.id,
             email: userData.email,
             first_name: userData.first_name,
@@ -113,10 +142,21 @@ export function Settings() {
               : null,
           }));
 
+          // Filter by settlement members if user is Admin
+          if (settlementMemberNames.length > 0) {
+            transformedUsers = transformedUsers.filter(
+              (user: UserProfile) =>
+                user.in_game_name &&
+                settlementMemberNames.includes(user.in_game_name),
+            );
+          }
+
           setUsers(transformedUsers);
           return;
         }
-      } catch (funcError) {}
+      } catch (funcError) {
+        console.warn('Admin function failed, trying direct query:', funcError);
+      }
 
       // Fallback to direct query
       const { data: usersData, error: usersError } = await supabaseClient
