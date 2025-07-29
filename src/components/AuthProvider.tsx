@@ -3,6 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { Loader, Center, Stack, Text } from '@mantine/core';
 import { bitjitaItemsCache } from '../services/bitjitaItemsCache';
+import { settlementRolesService } from '../services/settlementRolesService';
 
 interface AuthContextType {
   user: User | null;
@@ -76,10 +77,26 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
             initialSession?.user ?? null,
           );
           setUser(processedUser);
+
+          // Sync settlement roles for existing session (don't await)
+          if (processedUser) {
+            settlementRolesService
+              .syncUserSettlementRoles(processedUser.id)
+              .then((result) => {
+                console.log('✅ Settlement role sync completed:', result);
+              })
+              .catch((error) => {
+                console.error(
+                  'Failed to sync settlement roles on session restore:',
+                  error,
+                );
+              });
+          }
+
           setLoading(false);
           setInitialized(true);
         }
-      } catch (error) {
+      } catch {
         if (mounted) {
           setLoading(false);
           setInitialized(true);
@@ -97,6 +114,21 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
         setSession(newSession);
         const processedUser = checkImpersonation(newSession?.user ?? null);
         setUser(processedUser);
+
+        // Sync settlement roles on sign in (don't await)
+        if (event === 'SIGNED_IN' && processedUser) {
+          settlementRolesService
+            .syncUserSettlementRoles(processedUser.id)
+            .then((result) => {
+              console.log(
+                '✅ Settlement role sync completed on login:',
+                result,
+              );
+            })
+            .catch((error) => {
+              console.error('Failed to sync settlement roles on login:', error);
+            });
+        }
 
         // Clear impersonation on sign out
         if (event === 'SIGNED_OUT') {

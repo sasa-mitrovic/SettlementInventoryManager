@@ -24,13 +24,15 @@ import { useOptimizedUserWithProfile } from '../supabase/loader';
 import { useSettlement } from '../contexts/SettlementContext_simple';
 import { getPermissionLevel, getPermissionColor } from '../types/settlement';
 import { PermissionGate } from '../components/PermissionGate';
+import { SettlementPermissionGate } from '../components/SettlementPermissionGate';
 import { useSettlementCraftingOrderCounts } from '../hooks/useSettlementCraftingOrderCounts';
+import { useSettlementRole } from '../hooks/useSettlementRole';
 
 export function Dashboard() {
   const { userProfile, loading } = useOptimizedUserWithProfile();
   const { currentSettlement, isLoading: settlementLoading } = useSettlement();
   const { counts, loading: countsLoading } = useSettlementCraftingOrderCounts();
-
+  const { roleName } = useSettlementRole();
   if (loading || settlementLoading) {
     return (
       <Container size="lg" py="xl">
@@ -78,7 +80,7 @@ export function Dashboard() {
                 Welcome back, {userProfile?.in_game_name || userProfile?.email}
               </Text>
               <Text c="dimmed" size="sm">
-                Role: {userProfile?.role?.name || 'No role assigned'}
+                Role: {roleName || 'No role assigned'}
               </Text>
             </Box>
           </Group>
@@ -247,25 +249,17 @@ export function Dashboard() {
               </Stack>
             </Paper>
           </Grid.Col>
-
-          <Grid.Col span={{ base: 12, md: 6 }}>
-            <Paper withBorder shadow="sm" radius="md" p="xl" h="100%">
-              <Stack gap="md" align="center">
-                <IconSettings size={48} color="var(--mantine-color-gray-6)" />
-                <Title order={3} ta="center">
-                  Settings
-                </Title>
-                <Text ta="center" c="dimmed">
-                  Manage settlement settings and configurations
-                </Text>
-                <PermissionGate
-                  permission="settings.read"
-                  fallback={
-                    <Text c="red" size="sm" ta="center">
-                      You need 'settings.read' permission to access this page
-                    </Text>
-                  }
-                >
+          <SettlementPermissionGate anyRoles={['admin', 'super_admin']}>
+            <Grid.Col span={{ base: 12, md: 6 }}>
+              <Paper withBorder shadow="sm" radius="md" p="xl" h="100%">
+                <Stack gap="md" align="center">
+                  <IconSettings size={48} color="var(--mantine-color-gray-6)" />
+                  <Title order={3} ta="center">
+                    Settings
+                  </Title>
+                  <Text ta="center" c="dimmed">
+                    Manage settlement settings and configurations
+                  </Text>
                   <Button
                     component={Link}
                     to="/settings"
@@ -276,10 +270,10 @@ export function Dashboard() {
                   >
                     View Settings
                   </Button>
-                </PermissionGate>
-              </Stack>
-            </Paper>
-          </Grid.Col>
+                </Stack>
+              </Paper>
+            </Grid.Col>
+          </SettlementPermissionGate>
         </Grid>
       </Stack>
     </Container>

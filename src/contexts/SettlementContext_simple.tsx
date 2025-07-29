@@ -26,11 +26,6 @@ export function SettlementProvider({ children }: SettlementProviderProps) {
 
   // Helper function to process user profile and load settlements
   const processUserProfile = useCallback(async (userProfile: any) => {
-    console.log('👤 User profile:', {
-      inGameName: userProfile.in_game_name,
-      bitjitaUserId: userProfile.bitjita_user_id,
-    });
-
     if (!userProfile.bitjita_user_id) {
       throw new Error(
         `User ${userProfile.in_game_name || userProfile.id} has no bitjita_user_id. User must link their Bitjita account to access settlements.`,
@@ -39,14 +34,8 @@ export function SettlementProvider({ children }: SettlementProviderProps) {
 
     // Step 2: Fetch player settlements from Bitjita API via backend proxy
     const playerUrl = `/api/bitjita-proxy?endpoint=players/${userProfile.bitjita_user_id}`;
-    console.log('🌐 Fetching player data from backend proxy:', playerUrl);
 
     const response = await fetch(playerUrl);
-    console.log(
-      '🌐 Fetch response status:',
-      response.status,
-      response.statusText,
-    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -57,7 +46,6 @@ export function SettlementProvider({ children }: SettlementProviderProps) {
     }
 
     const playerData: any = await response.json();
-    console.log('📊 Player data received:', playerData);
 
     // Step 3: Convert claims to settlements
     // Note: playerData has a nested 'player' object structure
@@ -97,7 +85,6 @@ export function SettlementProvider({ children }: SettlementProviderProps) {
       },
     }));
 
-    console.log('✅ Found settlements:', playerSettlements);
     setSettlements(playerSettlements);
 
     // Set first settlement as current (or restore from localStorage)
@@ -109,7 +96,6 @@ export function SettlementProvider({ children }: SettlementProviderProps) {
       : playerSettlements[0];
 
     setCurrentSettlement(targetSettlement);
-    console.log('🎯 Current settlement set to:', targetSettlement.name);
   }, []);
 
   // Simple, direct settlement loading with impersonation support
@@ -120,7 +106,6 @@ export function SettlementProvider({ children }: SettlementProviderProps) {
       return;
     }
 
-    console.log('🏗️ Starting settlement load for user:', user.id);
     setIsLoading(true);
     setError(null);
 
@@ -162,18 +147,11 @@ export function SettlementProvider({ children }: SettlementProviderProps) {
       }
 
       // Normal mode: Get user profile directly from database
-      console.log('🔍 Querying user_profiles for user ID:', user.id);
 
       const { data: userProfiles, error: profileError } = await supabaseClient
         .from('user_profiles')
         .select('*')
         .eq('id', user.id);
-
-      console.log('📋 Query result:', {
-        userProfiles,
-        profileError,
-        count: userProfiles?.length,
-      });
 
       if (profileError) {
         console.error('❌ Database error getting user profile:', profileError);
