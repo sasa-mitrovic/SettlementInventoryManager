@@ -4,6 +4,7 @@ import { Authentication } from '../views/Auth';
 import { Signup } from '../views/Signup';
 import { PermissionsDemo } from '../views/PermissionsDemo';
 import { AuthDebugView } from '../views/AuthDebugView';
+import { DiscordSetupPage } from '../views/DiscordSetupPage';
 import App from '../views/Main/App';
 import { AppLayout } from '../views/Main/AppLayout';
 import { Dashboard } from '../views/Dashboard';
@@ -52,6 +53,10 @@ export const router = createBrowserRouter([
       {
         path: '/auth-debug',
         element: <AuthDebugView />,
+      },
+      {
+        path: '/discord-setup',
+        element: <DiscordSetupPage />,
       },
     ],
   },

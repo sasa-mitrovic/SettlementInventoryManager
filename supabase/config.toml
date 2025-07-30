@@ -127,13 +127,13 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 # Use an external OAuth provider. The full list of providers are: `apple`, `azure`, `bitbucket`,
 # `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
 # `twitter`, `slack`, `spotify`, `workos`, `zoom`.
-[auth.external.apple]
-enabled = false
-client_id = ""
+[auth.external.discord]
+enabled = true
+client_id = "1399602240700026980"
 # DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
-secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_DISCORD_SECRET)"
 # Overrides the default auth redirectUrl.
-redirect_uri = ""
+redirect_uri = "https://discord.com/oauth2/authorize?client_id=1399602240700026980&response_type=code&redirect_uri=https%3A%2F%2Fwivnmjigpxsonvgzwito.supabase.co%2Fauth%2Fv1%2Fcallback&scope=identify+guilds"
 # Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
 # or any other third-party OIDC providers.
 url = ""

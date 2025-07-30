@@ -8,6 +8,15 @@ export default defineConfig({
   define: {
     global: 'globalThis',
   },
+  resolve: {
+    alias: {
+      // Provide a browser-compatible polyfill for ws module
+      ws: '/src/polyfills/ws.js',
+    },
+  },
+  optimizeDeps: {
+    exclude: ['ws', '@supabase/realtime-js'],
+  },
   server: {
     fs: {
       allow: ['..'],

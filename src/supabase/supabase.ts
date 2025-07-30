@@ -304,6 +304,108 @@ export interface Database {
           completed_by?: string | null;
         };
       };
+      discord_integrations: {
+        Row: {
+          id: string;
+          settlement_id: string;
+          server_id: string;
+          server_name: string | null;
+          webhook_url: string;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          settlement_id: string;
+          server_id: string;
+          server_name?: string | null;
+          webhook_url: string;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          settlement_id?: string;
+          server_id?: string;
+          server_name?: string | null;
+          webhook_url?: string;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      discord_channels: {
+        Row: {
+          id: string;
+          discord_integration_id: string;
+          sector: string;
+          channel_id: string;
+          channel_name: string | null;
+          webhook_url: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          discord_integration_id: string;
+          sector: string;
+          channel_id: string;
+          channel_name?: string | null;
+          webhook_url: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          discord_integration_id?: string;
+          sector?: string;
+          channel_id?: string;
+          channel_name?: string | null;
+          webhook_url?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      discord_message_log: {
+        Row: {
+          id: string;
+          crafting_order_id: string | null;
+          discord_channel_id: string | null;
+          message_type: string;
+          discord_message_id: string | null;
+          webhook_response: string | null;
+          success: boolean;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          crafting_order_id?: string | null;
+          discord_channel_id?: string | null;
+          message_type: string;
+          discord_message_id?: string | null;
+          webhook_response?: string | null;
+          success?: boolean;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          crafting_order_id?: string | null;
+          discord_channel_id?: string | null;
+          message_type?: string;
+          discord_message_id?: string | null;
+          webhook_response?: string | null;
+          success?: boolean;
+          error_message?: string | null;
+          created_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
@@ -374,6 +476,17 @@ export interface Database {
           permission_name: string;
         };
         Returns: boolean;
+      };
+      get_discord_integration_status: {
+        Args: {
+          settlement_id_param: string;
+        };
+        Returns: {
+          has_integration: boolean;
+          server_name: string | null;
+          channel_count: number;
+          is_active: boolean;
+        }[];
       };
     };
     Enums: {
