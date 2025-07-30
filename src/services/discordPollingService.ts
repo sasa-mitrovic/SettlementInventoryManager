@@ -4,8 +4,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseServiceKey =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indpdm5tamlncHhzb252Z3p3aXRvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MzI4MDg0MSwiZXhwIjoyMDY4ODU2ODQxfQ.khQdltRf11-RCcntHNBtRQiEXalzhD79ge6COfrZ2tc';
+const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 // Use service role key for full database access (needed to update discord_message_log)
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
