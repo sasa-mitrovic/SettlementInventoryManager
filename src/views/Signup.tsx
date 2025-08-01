@@ -20,6 +20,7 @@ import { supabaseClient } from '../supabase/supabaseClient';
 import { useUser } from '../supabase/loader';
 import { Navigate, Link } from 'react-router-dom';
 import { PlayerSearchSelect } from '../components/PlayerSearchSelect';
+import { settlementPopulationService } from '../services/settlementPopulationService';
 
 export function Signup() {
   const [signupError, setSignupError] = useState<string | null>(null);
@@ -196,6 +197,7 @@ export function Signup() {
                     '✅ Profile completion successful:',
                     profileData.message,
                   );
+                  settlementPopulationService.onUserSignup();
                 } else {
                   console.error(
                     '❌ Profile completion failed:',
