@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react';
 import { notifications } from '@mantine/notifications';
 import { STATIC_CARGO_DATA } from './staticCargoData';
@@ -268,21 +269,31 @@ class UnifiedItemService {
       if (Array.isArray(data)) {
         // Old format: direct array
         cargoArray = data;
+      } else if (data && Array.isArray(data.cargos)) {
+        // New format: { cargos: [...] } (plural)
+        cargoArray = data.cargos;
+        console.log(
+          '[UnifiedItemService] Using new cargo API format (cargos):',
+          cargoArray.length,
+          'items',
+        );
       } else if (data && Array.isArray(data.cargo)) {
-        // New format: { cargo: [...], metrics: {...} }
+        // Alternative format: { cargo: [...] } (singular)
         cargoArray = data.cargo;
         console.log(
-          '[UnifiedItemService] Using new cargo API format with metrics:',
-          data.metrics,
+          '[UnifiedItemService] Using cargo API format (cargo):',
+          cargoArray.length,
+          'items',
         );
       } else if (data && Array.isArray(data.items)) {
         // Alternative format where cargo might be under 'items'
         cargoArray = data.items;
-        console.log('[UnifiedItemService] Using alternative cargo API format');
+        console.log('[UnifiedItemService] Using alternative cargo API format (items)');
       } else {
         console.error(
           '[UnifiedItemService] Cargo API returned unexpected format:',
-          data,
+          typeof data,
+          data ? Object.keys(data) : 'null',
         );
         throw new Error('Cargo API returned invalid data format');
       }
