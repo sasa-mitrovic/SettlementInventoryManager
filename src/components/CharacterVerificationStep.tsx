@@ -57,8 +57,11 @@ export function CharacterVerificationStep({
   // Call onVerified when verification succeeds
   useEffect(() => {
     if (state.status === 'verified' && state.sessionToken && state.bitjitaEntityId) {
+      // Capture values to avoid TypeScript narrowing issues in setTimeout
+      const sessionToken = state.sessionToken;
+      const bitjitaEntityId = state.bitjitaEntityId;
       const timer = setTimeout(() => {
-        onVerified(state.sessionToken!, state.bitjitaEntityId!);
+        onVerified(sessionToken, bitjitaEntityId);
       }, 1500);
       return () => clearTimeout(timer);
     }

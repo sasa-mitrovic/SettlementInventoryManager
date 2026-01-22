@@ -112,6 +112,20 @@ export function useCharacterVerification({
     };
   }, []);
 
+  // Define handleExpiration before the useEffect that uses it
+  const handleExpiration = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      status: 'expired',
+      error: 'Verification code has expired. Please generate a new code.',
+    }));
+  }, []);
+
   // Start countdown timer when expiresAt changes
   useEffect(() => {
     if (countdownIntervalRef.current) {
@@ -141,20 +155,7 @@ export function useCharacterVerification({
         clearInterval(countdownIntervalRef.current);
       }
     };
-  }, [state.expiresAt, state.status]);
-
-  const handleExpiration = useCallback(() => {
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-    }
-
-    setState((prev) => ({
-      ...prev,
-      status: 'expired',
-      error: 'Verification code has expired. Please generate a new code.',
-    }));
-  }, []);
+  }, [state.expiresAt, state.status, handleExpiration]);
 
   const stopPolling = useCallback(() => {
     if (pollIntervalRef.current) {
