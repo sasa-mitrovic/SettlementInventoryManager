@@ -8,17 +8,19 @@ const __dirname = dirname(__filename);
 
 dotenv.config({ path: join(__dirname, '../.env.local') });
 
-console.log('🔧 Environment check:');
-console.log('  VITE_SUPABASE_URL:', process.env.VITE_SUPABASE_URL);
-console.log(
-  '  VITE_SUPABASE_SERVICE_ROLE_KEY:',
-  process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ? '***' : 'NOT SET',
-);
+// Server-side script uses non-VITE prefixed env vars for service role key
+// Falls back to VITE_ prefixed vars for backward compatibility
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
-);
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Missing required environment variables:');
+  console.error('  SUPABASE_URL:', supabaseUrl ? 'SET' : 'NOT SET');
+  console.error('  SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? 'SET' : 'NOT SET');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function populateSettlements() {
   console.log('🏘️ Starting settlement population process...');

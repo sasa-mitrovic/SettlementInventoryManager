@@ -163,44 +163,41 @@ export function Signup() {
         }
 
         if (data.user) {
-          // Link verification to user and complete profile
-          setTimeout(async () => {
-            try {
-              if (data.user?.id) {
-                // Link the verification session to the new user
-                const { error: linkError } = await supabaseClient.rpc(
-                  'link_verification_to_user',
-                  {
-                    p_session_token: sessionToken,
-                    p_user_id: data.user.id,
-                  },
-                );
+          // Link verification to user and complete profile (no setTimeout - await properly)
+          try {
+            // Link the verification session to the new user
+            const { error: linkError } = await supabaseClient.rpc(
+              'link_verification_to_user',
+              {
+                p_session_token: sessionToken,
+                p_user_id: data.user.id,
+              },
+            );
 
-                if (linkError) {
-                  console.error('Error linking verification:', linkError);
-                }
-
-                // Also call complete_user_signup as backup
-                const { data: profileData, error: profileError } =
-                  await supabaseClient.rpc('complete_user_signup', {
-                    user_id: data.user.id,
-                    user_email: values.email,
-                    user_in_game_name: selectedPlayerData.playerName,
-                    user_empire: selectedPlayerData.empireName || null,
-                    user_bitjita_user_id: bitjitaEntityId,
-                    user_bitjita_empire_id: selectedPlayerData.empireId || null,
-                  });
-
-                if (profileError) {
-                  console.error('Error completing profile:', profileError);
-                } else if (profileData?.success) {
-                  console.log('Profile completion successful');
-                }
-              }
-            } catch (err) {
-              console.error('Error in post-signup:', err);
+            if (linkError) {
+              console.error('Error linking verification:', linkError);
+              // Non-fatal - continue with profile completion
             }
-          }, 1000);
+
+            // Complete user profile setup
+            const { error: profileError } =
+              await supabaseClient.rpc('complete_user_signup', {
+                user_id: data.user.id,
+                user_email: values.email,
+                user_in_game_name: selectedPlayerData.playerName,
+                user_empire: selectedPlayerData.empireName || null,
+                user_bitjita_user_id: bitjitaEntityId,
+                user_bitjita_empire_id: selectedPlayerData.empireId || null,
+              });
+
+            if (profileError) {
+              console.error('Error completing profile:', profileError);
+              // Show error but don't fail signup - user can still verify email
+            }
+          } catch (err) {
+            console.error('Error in post-signup:', err);
+            // Non-fatal - account was created, user can still verify email
+          }
 
           setSignupStep('success');
         }
