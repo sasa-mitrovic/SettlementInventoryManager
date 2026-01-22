@@ -43,6 +43,36 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Track settlement ID from localStorage for settlement-based permissions
+  const [currentSettlementId, setCurrentSettlementId] = useState<string | null>(
+    () => localStorage.getItem('currentSettlementId')
+  );
+
+  // Listen for settlement changes via storage events and custom events
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'currentSettlementId') {
+        setCurrentSettlementId(e.newValue);
+      }
+    };
+
+    // Also poll localStorage periodically for same-window changes
+    const checkSettlement = () => {
+      const storedId = localStorage.getItem('currentSettlementId');
+      if (storedId !== currentSettlementId) {
+        setCurrentSettlementId(storedId);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    const interval = setInterval(checkSettlement, 1000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, [currentSettlementId]);
+
   const fetchAllUserData = useCallback(async () => {
     // Don't fetch if no user is authenticated
     if (!user) {
@@ -62,11 +92,13 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
       const effectiveUserId =
         isImpersonating && targetUserId ? targetUserId : user.id;
 
-      // Use a service role call to bypass RLS issues temporarily
-      // Fetch permissions first (this should work)
+      // Fetch permissions with settlement context for settlement-based roles
       const permissionsResult = await supabaseClient.rpc(
         'get_user_permissions',
-        { user_id: effectiveUserId },
+        {
+          user_id: effectiveUserId,
+          p_settlement_id: currentSettlementId,
+        },
       );
 
       if (permissionsResult.error) {
@@ -76,9 +108,13 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
       }
 
       // Try to fetch profile using the secure function to avoid RLS issues
+      // Pass settlement_id for settlement-based role lookup
       const profileResult = await supabaseClient.rpc(
         'get_user_profile_with_role',
-        { target_user_id: effectiveUserId },
+        {
+          target_user_id: effectiveUserId,
+          p_settlement_id: currentSettlementId,
+        },
       );
 
       // If profile fetch fails, handle the error
@@ -180,7 +216,7 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, currentSettlementId]);
 
   const refetch = useCallback(async () => {
     await fetchAllUserData();

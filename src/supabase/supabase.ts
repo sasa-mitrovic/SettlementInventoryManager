@@ -73,7 +73,6 @@ export interface Database {
       user_profiles: {
         Row: {
           id: string;
-          role_id: string | null;
           first_name: string | null;
           last_name: string | null;
           in_game_name: string | null;
@@ -88,7 +87,6 @@ export interface Database {
         };
         Insert: {
           id: string;
-          role_id?: string | null;
           first_name?: string | null;
           last_name?: string | null;
           in_game_name?: string | null;
@@ -103,7 +101,6 @@ export interface Database {
         };
         Update: {
           id?: string;
-          role_id?: string | null;
           first_name?: string | null;
           last_name?: string | null;
           in_game_name?: string | null;
@@ -406,6 +403,50 @@ export interface Database {
           created_at?: string;
         };
       };
+      verification_codes: {
+        Row: {
+          id: string;
+          user_id: string;
+          code: string;
+          expected_username: string;
+          bitjita_entity_id: string;
+          status: 'pending' | 'verified' | 'expired' | 'failed';
+          expires_at: string;
+          verified_at: string | null;
+          attempts: number;
+          last_checked_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          code: string;
+          expected_username: string;
+          bitjita_entity_id: string;
+          status?: 'pending' | 'verified' | 'expired' | 'failed';
+          expires_at: string;
+          verified_at?: string | null;
+          attempts?: number;
+          last_checked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          code?: string;
+          expected_username?: string;
+          bitjita_entity_id?: string;
+          status?: 'pending' | 'verified' | 'expired' | 'failed';
+          expires_at?: string;
+          verified_at?: string | null;
+          attempts?: number;
+          last_checked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
@@ -488,6 +529,56 @@ export interface Database {
           is_active: boolean;
         }[];
       };
+      create_verification_code: {
+        Args: {
+          p_expected_username: string;
+          p_bitjita_entity_id: string;
+        };
+        Returns: {
+          success: boolean;
+          verification_id?: string;
+          code?: string;
+          expires_at?: string;
+          expected_username?: string;
+          error?: string;
+        };
+      };
+      get_pending_verification: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          success: boolean;
+          has_pending?: boolean;
+          verification_id?: string;
+          code?: string;
+          expected_username?: string;
+          bitjita_entity_id?: string;
+          expires_at?: string;
+          attempts?: number;
+          error?: string;
+        };
+      };
+      verify_character_code: {
+        Args: {
+          p_verification_id: string;
+          p_found_username: string;
+        };
+        Returns: {
+          success: boolean;
+          verified?: boolean;
+          message?: string;
+          expected?: string;
+          found?: string;
+          error?: string;
+        };
+      };
+      cancel_verification: {
+        Args: {
+          p_verification_id: string;
+        };
+        Returns: {
+          success: boolean;
+        };
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -504,6 +595,8 @@ export type Permission = Database['public']['Tables']['permissions']['Row'];
 export type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 export type RolePermission =
   Database['public']['Tables']['role_permissions']['Row'];
+export type VerificationCode =
+  Database['public']['Tables']['verification_codes']['Row'];
 
 export interface UserWithRole extends UserProfile {
   role?: Role;

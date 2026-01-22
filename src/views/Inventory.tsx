@@ -41,6 +41,7 @@ import { useDebouncedValue, useDisclosure } from '@mantine/hooks';
 import { CraftingOrderModal } from '../components/CraftingOrderModal';
 import { useUnifiedItems } from '../services/unifiedItemService';
 import { useSettlementInventory } from '../hooks/useSettlementInventory';
+import { useSettlement } from '../contexts/SettlementContext_simple';
 
 interface InventoryItem {
   id: string;
@@ -101,6 +102,7 @@ interface SortState {
 }
 
 export function Inventory() {
+  const { currentSettlement } = useSettlement();
   const {
     data: inventory,
     loading: inventoryLoading,
@@ -225,12 +227,19 @@ export function Inventory() {
   };
 
   const fetchTargets = useCallback(async () => {
+    if (!currentSettlement) {
+      setTargets([]);
+      setTargetsLoading(false);
+      return;
+    }
+
     try {
       setTargetsLoading(true);
       setTargetsError(null);
       const { data: targetsData, error: targetsError } = await supabaseClient
         .from('inventory_targets')
-        .select('*');
+        .select('*')
+        .eq('settlement_id', currentSettlement.entityId);
 
       if (targetsError) throw targetsError;
       setTargets(targetsData || []);
@@ -241,7 +250,7 @@ export function Inventory() {
     } finally {
       setTargetsLoading(false);
     }
-  }, []);
+  }, [currentSettlement]);
 
   const refreshData = useCallback(async () => {
     setRefreshing(true);
@@ -271,7 +280,7 @@ export function Inventory() {
     targetQuantity: number,
     targetId?: string,
   ) => {
-    if (!user || !canEditTargets) return;
+    if (!user || !canEditTargets || !currentSettlement) return;
 
     try {
       if (targetId) {
@@ -290,6 +299,7 @@ export function Inventory() {
             item_name: itemName,
             target_quantity: targetQuantity,
             created_by: user.id,
+            settlement_id: currentSettlement.entityId,
           });
 
         if (error) throw error;
@@ -297,7 +307,7 @@ export function Inventory() {
 
       await fetchTargets();
     } catch (err) {
-      // Error is handled silently to avoid exposing sensitive data
+      console.error('Failed to update inventory target:', err);
     }
   };
 
