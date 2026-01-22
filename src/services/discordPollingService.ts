@@ -1,25 +1,12 @@
 // Alternative Discord service using polling instead of WebSocket
-// Use this if the realtime WebSocket approach doesn't work
+// Uses anon key for security - may need RLS policies adjusted for updates
 
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-
-// Use service role key for full database access (needed to update discord_message_log)
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-interface DiscordMessage {
-  id: string;
-  webhook_response: string;
-  discord_channels: {
-    webhook_url: string;
-    channel_name: string;
-    discord_integrations: {
-      is_active: boolean;
-    };
-  };
-}
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Use anon key for client-side access (secure)
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 class DiscordPollingService {
   private intervalId: number | null = null;
@@ -49,16 +36,19 @@ class DiscordPollingService {
           `
           id,
           webhook_response,
+          discord_channel_id,
           discord_channels (
+            id,
             webhook_url,
             channel_name,
             discord_integrations (
+              id,
               is_active
             )
           )
         `,
         )
-        .eq('success', false)
+        .or('success.is.null,success.eq.false')
         .is('discord_message_id', null)
         .limit(5);
 
@@ -88,19 +78,31 @@ class DiscordPollingService {
   async processMessage(message: any) {
     try {
       console.log(`🚀 Processing message ${message.id}...`);
+      console.log('📋 Full message data:', JSON.stringify(message, null, 2));
 
-      const channels =
-        message.discord_channels as unknown as DiscordMessage['discord_channels'];
+      const channel = message.discord_channels;
+      console.log('📡 Channel data:', channel);
 
-      if (!channels?.discord_integrations?.is_active) {
+      if (!channel) {
+        console.log('❌ No discord_channels found in message');
+        return;
+      }
+
+      const integration = channel.discord_integrations;
+      console.log('🔗 Integration data:', integration);
+
+      if (!integration) {
+        console.log('❌ No discord_integrations found in channel');
+        return;
+      }
+
+      if (!integration.is_active) {
         console.log('⏭️ Skipping inactive integration');
         return;
       }
 
       console.log(`🚀 Processing Discord message ${message.id}...`);
-      console.log(
-        `📡 Webhook URL: ${channels.webhook_url.substring(0, 50)}...`,
-      );
+      console.log(`📡 Webhook URL: ${channel.webhook_url.substring(0, 50)}...`);
 
       // Parse and fix the webhook payload
       let webhookPayload = JSON.parse(message.webhook_response);
@@ -109,7 +111,7 @@ class DiscordPollingService {
       }
 
       // Send to Discord
-      const response = await fetch(channels.webhook_url, {
+      const response = await fetch(channel.webhook_url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Settlement Service - Handles settlement loading for users
 // This service works in both development (direct access) and production (API calls)
 

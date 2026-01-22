@@ -24,10 +24,10 @@ export class SettlementRolesService {
     error?: string;
   }> {
     try {
-      // Get user profile with current role and game name
+      // Get user profile with game name
       const { data: userProfile, error: profileError } = await supabaseClient
         .from('user_profiles')
-        .select('id, role_id, in_game_name, bitjita_user_id')
+        .select('id, in_game_name, bitjita_user_id')
         .eq('id', userId)
         .single();
 
@@ -38,15 +38,6 @@ export class SettlementRolesService {
           settlementsProcessed: 0,
           rolesCreated: 0,
           error: `Failed to fetch user profile: ${profileError?.message}`,
-        };
-      }
-
-      if (!userProfile?.role_id) {
-        console.log('User has no role assigned, skipping settlement sync');
-        return {
-          success: true,
-          settlementsProcessed: 0,
-          rolesCreated: 0,
         };
       }
 
@@ -77,12 +68,12 @@ export class SettlementRolesService {
       let rolesCreated = 0;
 
       // Use RPC function to safely sync settlement roles
+      // Note: p_role_id is no longer passed - the function will get it from settlement_roles or assign default
       try {
         const { data: syncResults, error: syncError } =
           await supabaseClient.rpc('sync_user_settlement_roles', {
             p_user_id: userProfile.id,
             p_settlement_ids: settlementIds,
-            p_role_id: userProfile.role_id,
             p_in_game_name: userProfile.in_game_name,
           });
 

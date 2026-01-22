@@ -124,6 +124,7 @@ export function Settings() {
 
         if (usersData) {
           // Transform the data from the function
+          // Note: role_id comes from settlement_roles via the RPC function
           let transformedUsers = usersData.map((userData: any) => ({
             id: userData.id,
             email: userData.email,
@@ -132,10 +133,9 @@ export function Settings() {
             in_game_name: userData.in_game_name,
             is_active: userData.is_active,
             created_at: userData.created_at,
-            role_id: userData.role_id,
             role: userData.role_name
               ? {
-                  id: userData.role_id,
+                  id: userData.role_id, // This comes from settlement_roles
                   name: userData.role_name,
                   description: userData.role_description,
                 }
@@ -158,7 +158,7 @@ export function Settings() {
         console.warn('Admin function failed, trying direct query:', funcError);
       }
 
-      // Fallback to direct query
+      // Fallback to direct query - role comes from settlement_roles now, not user_profiles
       const { data: usersData, error: usersError } = await supabaseClient
         .from('user_profiles')
         .select(
@@ -169,9 +169,7 @@ export function Settings() {
           last_name,
           in_game_name,
           is_active,
-          created_at,
-          role_id,
-          role:roles(id, name, description)
+          created_at
         `,
         )
         .order('created_at', { ascending: false });
@@ -182,6 +180,7 @@ export function Settings() {
       }
 
       // Transform the data to match our interface
+      // Note: role data is not available in fallback - use the admin RPC function for full role info
       const transformedUsers = (usersData || []).map((userData: any) => ({
         id: userData.id,
         email: userData.email,
@@ -190,14 +189,7 @@ export function Settings() {
         in_game_name: userData.in_game_name,
         is_active: userData.is_active,
         created_at: userData.created_at,
-        role_id: userData.role_id,
-        role: userData.role
-          ? {
-              id: userData.role.id,
-              name: userData.role.name,
-              description: userData.role.description,
-            }
-          : null,
+        role: null, // Role comes from settlement_roles via RPC function
       }));
 
       setUsers(transformedUsers);
@@ -242,16 +234,10 @@ export function Settings() {
       );
 
       if (rpcError) {
-        // Fallback to direct update
-        const { error: directError } = await supabaseClient
-          .from('user_profiles')
-          .update({ role_id: roleId || null })
-          .eq('id', userId);
-
-        if (directError) {
-          console.error('Direct update error:', directError);
-          throw directError;
-        }
+        // Direct update is no longer possible since role_id is in settlement_roles
+        // The RPC function is required to update roles
+        console.error('RPC error:', rpcError);
+        throw rpcError;
       } else {
         // Check the response from our database function
         if (!data.success) {

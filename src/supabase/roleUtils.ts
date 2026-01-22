@@ -184,23 +184,27 @@ export async function getPermissions(): Promise<Permission[]> {
 
 /**
  * Update a user's role (requires 'users.manage_roles' permission)
+ * Now uses settlement_roles instead of user_profiles.role_id
  */
 export async function updateUserRole(
   userId: string,
   roleId: string,
+  settlementId?: string,
 ): Promise<boolean> {
   try {
-    const { error } = await supabaseClient
-      .from('user_profiles')
-      .update({ role_id: roleId })
-      .eq('id', userId);
+    // Use the RPC function to update role in settlement_roles
+    const { data, error } = await supabaseClient.rpc('update_user_role', {
+      target_user_id: userId,
+      new_role_id: roleId,
+      p_settlement_id: settlementId || null,
+    });
 
     if (error) {
       console.error('Error updating user role:', error);
       return false;
     }
 
-    return true;
+    return data?.success ?? false;
   } catch (error) {
     console.error('Error in updateUserRole:', error);
     return false;
@@ -209,25 +213,45 @@ export async function updateUserRole(
 
 /**
  * Get all users with their roles (requires 'users.read' permission)
+ * Now uses get_all_users_for_admin RPC which gets roles from settlement_roles
  */
 export async function getUsersWithRoles(): Promise<UserWithRole[]> {
   try {
-    const { data: users, error } = await supabaseClient
-      .from('user_profiles')
-      .select(
-        `
-        *,
-        role:roles(*)
-      `,
-      )
-      .order('created_at', { ascending: false });
+    // Get current user ID for the admin function
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) {
+      console.error('No authenticated user');
+      return [];
+    }
+
+    const { data: users, error } = await supabaseClient.rpc(
+      'get_all_users_for_admin',
+      { requesting_user_id: user.id },
+    );
 
     if (error) {
       console.error('Error fetching users with roles:', error);
       return [];
     }
 
-    return (users as UserWithRole[]) || [];
+    // Transform the data to match UserWithRole interface
+    return (users || []).map((userData: any) => ({
+      id: userData.id,
+      email: userData.email,
+      first_name: userData.first_name,
+      last_name: userData.last_name,
+      in_game_name: userData.in_game_name,
+      is_active: userData.is_active,
+      created_at: userData.created_at,
+      updated_at: null,
+      role: userData.role_name
+        ? {
+            id: userData.role_id,
+            name: userData.role_name,
+            description: userData.role_description,
+          }
+        : null,
+    })) as UserWithRole[];
   } catch (error) {
     console.error('Error in getUsersWithRoles:', error);
     return [];
@@ -236,17 +260,16 @@ export async function getUsersWithRoles(): Promise<UserWithRole[]> {
 
 /**
  * Create a new user profile (usually called after user signup)
+ * Note: role is no longer set here - it's managed via settlement_roles
  */
 export async function createUserProfile(
   userId: string,
   email: string,
-  roleId?: string,
 ): Promise<boolean> {
   try {
     const { error } = await supabaseClient.from('user_profiles').insert({
       id: userId,
       email,
-      role_id: roleId,
     });
 
     if (error) {

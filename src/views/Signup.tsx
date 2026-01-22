@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -12,18 +12,22 @@ import {
   Title,
   Alert,
   Anchor,
+  Loader,
+  Stack,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { useCallback } from 'react';
 import { IconCheck, IconMail } from '@tabler/icons-react';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { useUser } from '../supabase/loader';
 import { Navigate, Link } from 'react-router-dom';
 import { PlayerSearchSelect } from '../components/PlayerSearchSelect';
+import { CharacterVerificationStep } from '../components/CharacterVerificationStep';
+
+type SignupStep = 'form' | 'verification' | 'creating_account' | 'success';
 
 export function Signup() {
+  const [signupStep, setSignupStep] = useState<SignupStep>('form');
   const [signupError, setSignupError] = useState<string | null>(null);
-  const [signupSuccess, setSignupSuccess] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [usernameValidationResult, setUsernameValidationResult] = useState<{
     available: boolean;
@@ -60,13 +64,15 @@ export function Signup() {
           ? 'You must select your in-game username from the search results'
           : null,
     },
-  }); // redirect if logged in
+  });
+
+  // Redirect if logged in
   const { user } = useUser();
   if (user) {
     return <Navigate to="/" />;
   }
 
-  const handleSignup = async (values: typeof form.values) => {
+  const handleFormSubmit = async (values: typeof form.values) => {
     setSignupError(null);
 
     // Check if username validation shows username is taken
@@ -92,10 +98,9 @@ export function Signup() {
       }
     } catch (emailCheckErr) {
       console.warn(
-        'Email availability check failed, proceeding with signup:',
+        'Email availability check failed, proceeding:',
         emailCheckErr,
       );
-      // Continue with signup even if check fails
     }
 
     // Require that a player was actually selected from the search results
@@ -114,119 +119,103 @@ export function Signup() {
       return;
     }
 
-    setIsLoading(true);
+    // Move to verification step (don't create account yet)
+    setSignupStep('verification');
+  };
 
-    try {
-      // Note: Empire data can be null for independent players (players without empire membership)
-      // The system supports both empire members and independent players
-      const { data, error } = await supabaseClient.auth.signUp({
-        email: values.email,
-        password: values.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth`,
-          data: {
-            in_game_name: values.inGameName,
-            empire: selectedPlayerData.empireName || null, // null for independent players
-            bitjita_empire_id: selectedPlayerData.empireId, // null for independent players
+  const handleVerificationComplete = useCallback(
+    async (sessionToken: string, bitjitaEntityId: string) => {
+      // Now create the account
+      setSignupStep('creating_account');
+      setIsLoading(true);
+
+      try {
+        const values = form.values;
+
+        const { data, error } = await supabaseClient.auth.signUp({
+          email: values.email,
+          password: values.password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth`,
+            data: {
+              in_game_name: selectedPlayerData.playerName,
+              empire: selectedPlayerData.empireName || null,
+              bitjita_empire_id: selectedPlayerData.empireId,
+            },
           },
-        },
-      });
+        });
 
-      if (error) {
-        console.error('Signup error details:', error);
-        // Provide more specific error messages based on the error type
-        if (error.message?.includes('Database error saving new user')) {
-          setSignupError(
-            'There was an issue creating your account. This might be due to a configuration problem. Please try again or contact support if the issue persists.',
-          );
-        } else if (error.message?.includes('User already registered')) {
-          setSignupError(
-            'An account with this email already exists. Please try signing in instead.',
-          );
-        } else {
-          setSignupError(error.message);
+        if (error) {
+          console.error('Signup error details:', error);
+          if (error.message?.includes('Database error saving new user')) {
+            setSignupError(
+              'There was an issue creating your account. Please try again or contact support.',
+            );
+          } else if (error.message?.includes('User already registered')) {
+            setSignupError(
+              'An account with this email already exists. Please try signing in instead.',
+            );
+          } else {
+            setSignupError(error.message);
+          }
+          setSignupStep('form');
+          return;
         }
-      } else if (data.user) {
-        // Wait a moment and then ensure the profile has the in_game_name
-        // This is a fallback in case the trigger doesn't work
-        // Note: Supports both empire members and independent players (null empire values)
-        setTimeout(async () => {
+
+        if (data.user) {
+          // Link verification to user and complete profile (no setTimeout - await properly)
           try {
-            if (data.user?.id) {
-              console.log('🔧 Current selectedPlayerData:', selectedPlayerData);
-              console.log('🔧 Completing user signup with data:', {
+            // Link the verification session to the new user
+            const { error: linkError } = await supabaseClient.rpc(
+              'link_verification_to_user',
+              {
+                p_session_token: sessionToken,
+                p_user_id: data.user.id,
+              },
+            );
+
+            if (linkError) {
+              console.error('Error linking verification:', linkError);
+              // Non-fatal - continue with profile completion
+            }
+
+            // Complete user profile setup
+            const { error: profileError } =
+              await supabaseClient.rpc('complete_user_signup', {
                 user_id: data.user.id,
                 user_email: values.email,
-                user_in_game_name: values.inGameName,
+                user_in_game_name: selectedPlayerData.playerName,
                 user_empire: selectedPlayerData.empireName || null,
-                user_bitjita_user_id: selectedPlayerData.entityId || null,
+                user_bitjita_user_id: bitjitaEntityId,
                 user_bitjita_empire_id: selectedPlayerData.empireId || null,
               });
 
-              console.log(
-                '🔧 About to call complete_user_signup RPC function...',
-              );
-              const { data: profileData, error: profileError } =
-                await supabaseClient.rpc('complete_user_signup', {
-                  user_id: data.user.id,
-                  user_email: values.email,
-                  user_in_game_name: values.inGameName,
-                  user_empire: selectedPlayerData.empireName || null, // null for independent players
-                  user_bitjita_user_id: selectedPlayerData.entityId || null,
-                  user_bitjita_empire_id: selectedPlayerData.empireId || null, // null for independent players
-                });
-              console.log('🔧 RPC call completed. Result:', {
-                profileData,
-                profileError,
-              });
-
-              if (profileError) {
-                console.error('❌ Error completing profile:', profileError);
-                console.error('❌ Profile error details:', {
-                  message: profileError.message,
-                  details: profileError.details,
-                  hint: profileError.hint,
-                  code: profileError.code,
-                });
-                // Don't show this error to user since signup was successful
-                // This is just a fallback mechanism
-              } else if (profileData) {
-                if (profileData.success) {
-                  console.log(
-                    '✅ Profile completion successful:',
-                    profileData.message,
-                  );
-                } else {
-                  console.error(
-                    '❌ Profile completion failed:',
-                    profileData.error,
-                  );
-                  // Log additional details if available
-                  if (profileData.error_detail) {
-                    console.error('❌ SQL State:', profileData.error_detail);
-                  }
-                }
-              } else {
-                console.error(
-                  '❌ No profile data returned from complete_user_signup',
-                );
-              }
+            if (profileError) {
+              console.error('Error completing profile:', profileError);
+              // Show error but don't fail signup - user can still verify email
             }
           } catch (err) {
-            console.error('Error calling complete_user_signup:', err);
+            console.error('Error in post-signup:', err);
+            // Non-fatal - account was created, user can still verify email
           }
-        }, 1000); // Wait 1 second for the trigger to complete
 
-        setSignupSuccess(true);
-        form.reset();
+          setSignupStep('success');
+        }
+      } catch (err) {
+        console.error('Signup error:', err);
+        setSignupError('An unexpected error occurred. Please try again.');
+        setSignupStep('form');
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error('Signup error:', err);
-      setSignupError('An unexpected error occurred. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+    [form.values, selectedPlayerData],
+  );
+
+  const handleVerificationCancel = useCallback(() => {
+    setSignupStep('form');
+    setSignupError(null);
+  }, []);
 
   const handlePlayerSelect = useCallback(
     (
@@ -245,27 +234,67 @@ export function Signup() {
       if (playerName) {
         form.setFieldValue('inGameName', playerName);
       }
-      console.log('🔧 Player selected:', selectedPlayerData);
     },
     [form],
   );
-  if (signupSuccess) {
+
+  // Creating account step
+  if (signupStep === 'creating_account') {
+    return (
+      <Box h="100vh" w="100vw">
+        <Center h="100vh" w="100%">
+          <Container size={620} miw={440}>
+            <Paper withBorder shadow="md" p={30} radius="md">
+              <Stack align="center" gap="md">
+                <Loader size="lg" />
+                <Title order={3}>Creating Your Account</Title>
+                <Text c="dimmed">
+                  Please wait while we set up your account...
+                </Text>
+              </Stack>
+            </Paper>
+          </Container>
+        </Center>
+      </Box>
+    );
+  }
+
+  // Verification step
+  if (signupStep === 'verification') {
+    return (
+      <Box h="100vh" w="100vw">
+        <Center h="100vh" w="100%">
+          <Container size={620} miw={440}>
+            <CharacterVerificationStep
+              expectedUsername={selectedPlayerData.playerName || ''}
+              bitjitaEntityId={selectedPlayerData.entityId || ''}
+              onVerified={handleVerificationComplete}
+              onCancel={handleVerificationCancel}
+            />
+          </Container>
+        </Center>
+      </Box>
+    );
+  }
+
+  // Success step
+  if (signupStep === 'success') {
     return (
       <Box h="100vh" w="100vw">
         <Center h="100vh" w="100%">
           <Container size={620} miw={440}>
             <Alert
               icon={<IconCheck size="1rem" />}
-              title="Check your email!"
+              title="Account Created Successfully!"
               color="green"
               radius="md"
             >
               <Text>
-                We've sent you a verification email. Please check your inbox and
-                click the verification link to complete your account setup.
+                Your character <strong>{selectedPlayerData.playerName}</strong>{' '}
+                has been verified and your account is ready.
               </Text>
               <Text mt="md">
-                After verifying your email, you can{' '}
+                Please check your email for a verification link, then{' '}
                 <Anchor component={Link} to="/auth">
                   sign in here
                 </Anchor>
@@ -278,6 +307,7 @@ export function Signup() {
     );
   }
 
+  // Form step (default)
   return (
     <Box h="100vh" w="100vw">
       <Center h="100vh" w="100%">
@@ -290,7 +320,7 @@ export function Signup() {
           </Group>
 
           <Paper withBorder shadow="md" p={30} mt={30} radius="md">
-            <form onSubmit={form.onSubmit(handleSignup)}>
+            <form onSubmit={form.onSubmit(handleFormSubmit)}>
               <TextInput
                 label="Email"
                 placeholder="you@example.com"
@@ -350,7 +380,7 @@ export function Signup() {
                     !usernameValidationResult.available)
                 }
               >
-                Sign Up
+                Continue to Verification
               </Button>
               <Text c="dimmed" size="sm" ta="center" mt="md">
                 Already have an account?{' '}
