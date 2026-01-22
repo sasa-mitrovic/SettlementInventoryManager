@@ -173,29 +173,32 @@ export function CacheManager() {
           </Button>
         </Group>
 
-        {process.env.NODE_ENV === 'development' && (
-          <>
-            <Divider />
-            <Stack gap="xs">
-              <Text size="sm" fw={500} c="dimmed">
-                Debug Info:
-              </Text>
-              <Code block>
-                {JSON.stringify(
-                  {
-                    isValid: cacheInfo.isValid,
-                    itemCount: cacheInfo.itemCount,
-                    age: cacheInfo.age,
-                    loading: cacheInfo.loading,
-                    storageKey: 'bitjita_items_cache',
-                  },
-                  null,
-                  2,
-                )}
-              </Code>
-            </Stack>
-          </>
-        )}
+        {
+          // eslint-disable-next-line no-undef
+          process.env.NODE_ENV === 'development' && (
+            <>
+              <Divider />
+              <Stack gap="xs">
+                <Text size="sm" fw={500} c="dimmed">
+                  Debug Info:
+                </Text>
+                <Code block>
+                  {JSON.stringify(
+                    {
+                      isValid: cacheInfo.isValid,
+                      itemCount: cacheInfo.itemCount,
+                      age: cacheInfo.age,
+                      loading: cacheInfo.loading,
+                      storageKey: 'bitjita_items_cache',
+                    },
+                    null,
+                    2,
+                  )}
+                </Code>
+              </Stack>
+            </>
+          )
+        }
       </Stack>
     </Paper>
   );
