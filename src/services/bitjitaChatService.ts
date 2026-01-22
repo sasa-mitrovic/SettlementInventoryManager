@@ -115,7 +115,19 @@ const proxyUrl = `/api/bitjita-proxy?endpoint=${encodeURIComponent(endpoint.subs
 
       // Only accept exact matches to prevent false positives
       // The user should post ONLY the verification code
-      if (messageText === trimmedCode) {
+if (messageText === trimmedCode) {
+  // Only accept messages from the last 5 minutes
+  const messageTime = new Date(message.timestamp);
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  
+  if (messageTime >= fiveMinutesAgo) {
+    return {
+      found: true,
+      username: message.username,
+      timestamp: message.timestamp,
+    };
+  }
+}
         return {
           found: true,
           username: message.username,
