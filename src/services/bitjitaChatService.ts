@@ -39,7 +39,7 @@ class BitjitaChatService {
    */
   private async makeRequest<T>(endpoint: string): Promise<T> {
     // Use backend proxy for API requests to avoid CORS issues
-    const proxyUrl = `/api/bitjita-proxy?endpoint=${endpoint.substring(1)}`;
+const proxyUrl = `/api/bitjita-proxy?endpoint=${encodeURIComponent(endpoint.substring(1))}`;
 
     const response = await fetch(proxyUrl);
 
