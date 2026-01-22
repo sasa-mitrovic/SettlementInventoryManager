@@ -39,7 +39,7 @@ class BitjitaChatService {
    */
   private async makeRequest<T>(endpoint: string): Promise<T> {
     // Use backend proxy for API requests to avoid CORS issues
-const proxyUrl = `/api/bitjita-proxy?endpoint=${encodeURIComponent(endpoint.substring(1))}`;
+    const proxyUrl = `/api/bitjita-proxy?endpoint=${encodeURIComponent(endpoint.substring(1))}`;
 
     const response = await fetch(proxyUrl);
 
@@ -60,7 +60,7 @@ const proxyUrl = `/api/bitjita-proxy?endpoint=${encodeURIComponent(endpoint.subs
     } catch (error) {
       console.error('Error fetching chat messages:', error);
       throw new Error(
-        `Failed to fetch chat messages: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to fetch chat messages: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -104,7 +104,7 @@ const proxyUrl = `/api/bitjita-proxy?endpoint=${encodeURIComponent(endpoint.subs
    */
   findVerificationCode(
     messages: ParsedChatMessage[],
-    code: string
+    code: string,
   ): VerificationCodeMatch {
     // Look for exact code match in message text
     // The code should be the entire message content (trimmed)
@@ -115,27 +115,20 @@ const proxyUrl = `/api/bitjita-proxy?endpoint=${encodeURIComponent(endpoint.subs
 
       // Only accept exact matches to prevent false positives
       // The user should post ONLY the verification code
-if (messageText === trimmedCode) {
-  // Only accept messages from the last 5 minutes
-  const messageTime = new Date(message.timestamp);
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-  
-  if (messageTime >= fiveMinutesAgo) {
-    return {
-      found: true,
-      username: message.username,
-      timestamp: message.timestamp,
-    };
-  }
-}
-        return {
-          found: true,
-          username: message.username,
-          timestamp: message.timestamp,
-        };
+      if (messageText === trimmedCode) {
+        // Only accept messages from the last 5 minutes
+        const messageTime = new Date(message.timestamp);
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+        if (messageTime >= fiveMinutesAgo) {
+          return {
+            found: true,
+            username: message.username,
+            timestamp: message.timestamp,
+          };
+        }
       }
     }
-
     return {
       found: false,
       username: null,
@@ -146,7 +139,9 @@ if (messageText === trimmedCode) {
   /**
    * Convenience method: Fetch messages and search for a code in one call
    */
-  async searchForVerificationCode(code: string): Promise<VerificationCodeMatch> {
+  async searchForVerificationCode(
+    code: string,
+  ): Promise<VerificationCodeMatch> {
     try {
       const response = await this.fetchChatMessages();
       const messages = this.parseMessages(response);
@@ -166,9 +161,7 @@ if (messageText === trimmedCode) {
    * Check if two usernames match (case-insensitive)
    */
   usernamesMatch(username1: string, username2: string): boolean {
-    return (
-      username1.toLowerCase().trim() === username2.toLowerCase().trim()
-    );
+    return username1.toLowerCase().trim() === username2.toLowerCase().trim();
   }
 }
 
