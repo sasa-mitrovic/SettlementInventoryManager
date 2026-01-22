@@ -64,7 +64,7 @@ interface UseCharacterVerificationReturn {
 }
 
 const POLL_INTERVAL_MS = 5000; // 5 seconds
-const POLLING_DURATION_MS = 60000; // 1 minute of polling
+const POLLING_DURATION_MS = 300000; // 5 minutes of polling (matches code expiry)
 
 export function useCharacterVerification({
   pollIntervalMs = POLL_INTERVAL_MS,
