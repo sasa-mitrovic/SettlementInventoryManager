@@ -140,10 +140,16 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
           last_name: user.user_metadata?.last_name || '',
           in_game_name: user.user_metadata?.in_game_name || 'Player',
           is_active: true,
+          avatar_url: null,
+          empire: null,
+          bitjita_user_id: null,
+          bitjita_empire_id: null,
           role: {
             id: 'temp-super-admin',
             name: 'super_admin', // Assume super_admin for now
             description: 'Super administrator',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           },
           created_at: user.created_at,
           updated_at: new Date().toISOString(),
@@ -160,6 +166,10 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
             last_name: profile.last_name,
             in_game_name: profile.in_game_name,
             is_active: profile.is_active,
+            avatar_url: profile.avatar_url || null,
+            empire: profile.empire || null,
+            bitjita_user_id: profile.bitjita_user_id || null,
+            bitjita_empire_id: profile.bitjita_empire_id || null,
             created_at: profile.created_at,
             updated_at: profile.updated_at,
             role_id: profile.role_id,
@@ -168,8 +178,10 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
                   id: profile.role_id,
                   name: profile.role_name,
                   description: profile.role_description,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
                 }
-              : null,
+              : undefined,
           };
         } else {
           throw new Error('User profile not found');
