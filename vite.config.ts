@@ -25,6 +25,9 @@ export default defineConfig({
       '/api/bitjita-proxy': {
         target: 'https://bitjita.com',
         changeOrigin: true,
+        secure: true,
+        timeout: 30000, // 30 second timeout
+        proxyTimeout: 30000,
         rewrite: (path) => {
           // Extract endpoint parameter from the path
           const url = new URL(path, 'http://localhost');
@@ -42,6 +45,20 @@ export default defineConfig({
         headers: {
           Accept: 'application/json',
           'User-Agent': 'SettlementInventoryManager/1.0',
+          Connection: 'keep-alive',
+        },
+        configure: (proxy) => {
+          proxy.on('error', (err, _req, res) => {
+            console.error('[Proxy Error]', err.message);
+            if (res && !res.headersSent && typeof res.writeHead === 'function') {
+              res.writeHead(502, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Proxy error', message: err.message }));
+            }
+          });
+          proxy.on('proxyReq', (proxyReq) => {
+            // Keep connection alive
+            proxyReq.setHeader('Connection', 'keep-alive');
+          });
         },
       },
       // Note: scrape-settlement and scrape-status endpoints would need

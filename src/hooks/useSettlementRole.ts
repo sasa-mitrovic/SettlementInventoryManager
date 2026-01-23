@@ -31,12 +31,6 @@ export function useSettlementRole(): UseSettlementRoleResult {
       try {
         setLoading(true);
         setError(null);
-        console.log(
-          '🔍 [SettlementRole] Fetching role for user:',
-          user.id,
-          'in settlement:',
-          currentSettlement.entityId,
-        );
 
         const params = {
           auth_id: user.id,
@@ -48,7 +42,6 @@ export function useSettlementRole(): UseSettlementRoleResult {
           params,
         );
 
-        console.log('data from get_user_settlement_role:', data);
         if (rpcError) {
           console.error('Error fetching settlement role:', rpcError);
           setError(rpcError.message);

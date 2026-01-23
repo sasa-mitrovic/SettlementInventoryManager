@@ -1,5 +1,4 @@
 import {
-  Box,
   Group,
   Stack,
   Title,
@@ -156,14 +155,9 @@ export const AppLayout = () => {
                       }
                       rightSection={<IconChevronDown size={14} />}
                     >
-                      <Box style={{ textAlign: 'left' }}>
-                        <Text size="sm" fw={500}>
-                          {userProfile?.in_game_name || 'User'}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {userProfile?.role?.name || 'No role'}
-                        </Text>
-                      </Box>
+                      <Text size="sm" fw={500}>
+                        {userProfile?.in_game_name || 'User'}
+                      </Text>
                     </Button>
                   </Menu.Target>
 
