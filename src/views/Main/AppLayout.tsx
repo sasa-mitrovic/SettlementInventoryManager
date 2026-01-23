@@ -1,5 +1,4 @@
 import {
-  Box,
   Group,
   Stack,
   Title,
