@@ -16,11 +16,14 @@ export class SettlementRolesService {
   /**
    * Sync user's settlement roles on login
    * Fetches user's settlements from Bitjita API and ensures they have appropriate roles
+   * Automatically assigns admin role to settlement owners
+   * Removes stale settlement affiliations that no longer exist in Bitjita
    */
   async syncUserSettlementRoles(userId: string): Promise<{
     success: boolean;
     settlementsProcessed: number;
     rolesCreated: number;
+    rolesRemoved: number;
     error?: string;
   }> {
     try {
@@ -37,6 +40,7 @@ export class SettlementRolesService {
           success: false,
           settlementsProcessed: 0,
           rolesCreated: 0,
+          rolesRemoved: 0,
           error: `Failed to fetch user profile: ${profileError?.message}`,
         };
       }
@@ -47,34 +51,37 @@ export class SettlementRolesService {
           success: true,
           settlementsProcessed: 0,
           rolesCreated: 0,
+          rolesRemoved: 0,
         };
       }
 
-      // Fetch user's settlements from Bitjita API
-      const settlementIds = await this.fetchUserSettlements(
+      // Fetch user's settlements from Bitjita API (includes ownership info)
+      const settlements = await this.fetchUserSettlements(
         userProfile.bitjita_user_id,
         userProfile.in_game_name,
       );
 
-      if (settlementIds.length === 0) {
-        console.log('No settlements found for user');
-        return {
-          success: true,
-          settlementsProcessed: 0,
-          rolesCreated: 0,
-        };
-      }
+      // Extract settlement IDs and ownership flags
+      // Empty array means user has no settlements - we'll remove all their roles
+      const settlementIds = settlements.map((s) => s.settlementId);
+      const ownerSettlementIds = settlements
+        .filter((s) => s.isOwner)
+        .map((s) => s.settlementId);
 
       let rolesCreated = 0;
+      let rolesRemoved = 0;
 
       // Use RPC function to safely sync settlement roles
-      // Note: p_role_id is no longer passed - the function will get it from settlement_roles or assign default
+      // Pass ownership info so owners get admin role automatically
+      // Also removes any settlement_roles not in the API response
       try {
         const { data: syncResults, error: syncError } =
           await supabaseClient.rpc('sync_user_settlement_roles', {
             p_user_id: userProfile.id,
             p_settlement_ids: settlementIds,
             p_in_game_name: userProfile.in_game_name,
+            p_owner_settlement_ids: ownerSettlementIds,
+            p_remove_stale: true,
           });
 
         if (syncError) {
@@ -83,19 +90,25 @@ export class SettlementRolesService {
             success: false,
             settlementsProcessed: settlementIds.length,
             rolesCreated: 0,
+            rolesRemoved: 0,
             error: `Failed to sync settlement roles: ${syncError.message}`,
           };
         }
 
-        // Count how many were created
+        // Count how many were created/removed
         type SyncResult = {
           settlement_id: string;
           created: boolean;
+          updated: boolean;
+          removed: boolean;
           error_message: string | null;
         };
 
         rolesCreated =
           syncResults?.filter((result: SyncResult) => result.created)?.length ||
+          0;
+        rolesRemoved =
+          syncResults?.filter((result: SyncResult) => result.removed)?.length ||
           0;
       } catch (error) {
         console.error('Failed to sync settlement roles:', error);
@@ -103,6 +116,7 @@ export class SettlementRolesService {
           success: false,
           settlementsProcessed: settlementIds.length,
           rolesCreated: 0,
+          rolesRemoved: 0,
           error:
             error instanceof Error ? error.message : 'Unknown error occurred',
         };
@@ -112,6 +126,7 @@ export class SettlementRolesService {
         success: true,
         settlementsProcessed: settlementIds.length,
         rolesCreated,
+        rolesRemoved,
       };
     } catch (error) {
       console.error('Failed to sync user settlement roles:', error);
@@ -119,6 +134,7 @@ export class SettlementRolesService {
         success: false,
         settlementsProcessed: 0,
         rolesCreated: 0,
+        rolesRemoved: 0,
         error:
           error instanceof Error ? error.message : 'Unknown error occurred',
       };
@@ -127,12 +143,12 @@ export class SettlementRolesService {
 
   /**
    * Fetch user's settlements from Bitjita API
-   * Private helper method for settlement role sync
+   * Returns settlement IDs along with ownership status
    */
   private async fetchUserSettlements(
     bitjitaUserId: string,
     inGameName: string,
-  ): Promise<string[]> {
+  ): Promise<Array<{ settlementId: string; isOwner: boolean }>> {
     if (!inGameName) {
       return [];
     }
@@ -162,19 +178,21 @@ export class SettlementRolesService {
       }
 
       const data = await response.json();
-      console.log('API response:', data);
 
       if (!data || !data.player?.claims) {
         console.log(`No claims data returned for user ${inGameName}`);
         return [];
       }
 
-      // Extract settlement entity IDs from the claims
-      const settlementIds = data.player.claims
-        .map((claim: { entityId: string }) => claim.entityId)
-        .filter(Boolean);
+      // Extract settlement entity IDs and ownership status from the claims
+      const settlements = data.player.claims
+        .filter((claim: { entityId: string }) => claim.entityId)
+        .map((claim: { entityId: string; isOwner?: boolean }) => ({
+          settlementId: claim.entityId,
+          isOwner: claim.isOwner === true,
+        }));
 
-      return settlementIds;
+      return settlements;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         console.warn(`API request timeout for user ${inGameName}`);

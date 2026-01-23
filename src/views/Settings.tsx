@@ -71,7 +71,7 @@ export function Settings() {
   const { user: authUser, loading: authLoading, initialized } = useAuth();
   const { userProfile } = useOptimizedUserWithProfile();
   const permissionContext = usePermissionContext();
-  const { currentSettlement } = useSettlement();
+  const { currentSettlement, isLoading: settlementLoading } = useSettlement();
 
   const fetchUsers = async () => {
     try {
@@ -84,12 +84,13 @@ export function Settings() {
         throw new Error('User not authenticated');
       }
 
-      // Check if current user is an Admin (not Super Admin) and filter by settlement members
+      // Filter users by settlement members for both admin and super_admin
       let settlementMemberNames: string[] = [];
-      if (
-        userProfile?.role?.name?.toLowerCase() === 'admin' &&
-        currentSettlement
-      ) {
+      const userRole = userProfile?.role?.name?.toLowerCase();
+      const shouldFilterBySettlement =
+        (userRole === 'admin' || userRole === 'super_admin') && currentSettlement;
+
+      if (shouldFilterBySettlement && currentSettlement) {
         try {
           const membersUrl = `/api/bitjita-proxy?endpoint=claims/${currentSettlement.entityId}/members`;
           const response = await fetch(membersUrl);
@@ -142,8 +143,8 @@ export function Settings() {
               : null,
           }));
 
-          // Filter by settlement members if user is Admin
-          if (settlementMemberNames.length > 0) {
+          // Filter by settlement members if filtering is enabled
+          if (shouldFilterBySettlement && settlementMemberNames.length > 0) {
             transformedUsers = transformedUsers.filter(
               (user: UserProfile) =>
                 user.in_game_name &&
@@ -440,8 +441,10 @@ export function Settings() {
 
   useEffect(() => {
     const loadData = async () => {
-      // Only load data once auth is initialized
-      if (!initialized || authLoading) {
+      // Only load data once auth is initialized, user profile is loaded, and settlement is loaded
+      // userProfile is required to determine the user's role for filtering
+      // settlementLoading ensures we wait for settlement data before filtering
+      if (!initialized || authLoading || !userProfile || settlementLoading) {
         return;
       }
 
@@ -450,7 +453,7 @@ export function Settings() {
       setLoading(false);
     };
     loadData();
-  }, [initialized, authLoading, authUser]); // Depend on auth state
+  }, [initialized, authLoading, authUser, userProfile, currentSettlement, settlementLoading]); // Depend on auth state and settlement
 
   const getRoleBadgeColor = (roleName: string | null) => {
     switch (roleName?.toLowerCase()) {
@@ -478,8 +481,8 @@ export function Settings() {
     return user.email;
   };
 
-  // Show loading if auth is still initializing OR data is loading
-  if (!initialized || authLoading || loading) {
+  // Show loading if auth is still initializing, settlement is loading, OR data is loading
+  if (!initialized || authLoading || settlementLoading || loading) {
     return (
       <Center h={400}>
         <Loader size="lg" />
@@ -557,116 +560,113 @@ export function Settings() {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {users.map((user) => (
-                    <Table.Tr key={user.id}>
-                      <Table.Td>
-                        <Text fw={500}>{formatUserName(user)}</Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="sm" c="dimmed">
-                          {user.email}
+                  {users.length === 0 ? (
+                    <Table.Tr>
+                      <Table.Td colSpan={6}>
+                        <Text ta="center" c="dimmed" py="lg">
+                          No accounts found for settlement members
                         </Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge
-                          color={getRoleBadgeColor(user.role?.name || null)}
-                          size="sm"
-                          variant="light"
-                        >
-                          {user.role?.name || 'No Role'}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge
-                          color={user.is_active ? 'green' : 'red'}
-                          size="sm"
-                          variant="light"
-                        >
-                          {user.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="sm">
-                          {new Date(user.created_at).toLocaleDateString()}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Group gap="xs">
-                          <PermissionGate permission="users.manage_roles">
-                            <Select
-                              key={`${user.id}-${user.role?.id || 'no-role'}`}
-                              placeholder="Select role"
-                              value={user.role?.id || ''}
-                              onChange={(value) => {
-                                updateUserRole(user.id, value);
-                              }}
-                              data={[
-                                { value: '', label: 'No Role' },
-                                ...roles.map((role) => ({
-                                  value: role.id,
-                                  label: role.name,
-                                })),
-                              ]}
-                              size="sm"
-                              w={150}
-                              disabled={updatingUserId === user.id}
-                              clearable={false}
-                            />
-                          </PermissionGate>
-
-                          {/* Impersonate button - Super Admin only */}
-                          {userProfile?.role?.name?.toLowerCase() ===
-                            'super_admin' &&
-                            user.id !== authUser?.id && (
-                              <Tooltip label="Impersonate user">
-                                <ActionIcon
-                                  color="blue"
-                                  variant="light"
-                                  size="sm"
-                                  onClick={() => impersonateUser(user)}
-                                >
-                                  <IconUserCheck size={14} />
-                                </ActionIcon>
-                              </Tooltip>
-                            )}
-
-                          <PermissionGate
-                            anyPermissions={['users.delete', 'users.manage']}
-                          >
-                            {canDeleteUser(user) && (
-                              <Tooltip label="Delete user permanently">
-                                <ActionIcon
-                                  color="red"
-                                  variant="light"
-                                  size="sm"
-                                  onClick={() => confirmDeleteUser(user)}
-                                  loading={deletingUserId === user.id}
-                                  disabled={deletingUserId === user.id}
-                                >
-                                  <IconTrash size={14} />
-                                </ActionIcon>
-                              </Tooltip>
-                            )}
-                          </PermissionGate>
-                        </Group>
                       </Table.Td>
                     </Table.Tr>
-                  ))}
+                  ) : (
+                    users.map((user) => (
+                      <Table.Tr key={user.id}>
+                        <Table.Td>
+                          <Text fw={500}>{formatUserName(user)}</Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Text size="sm" c="dimmed">
+                            {user.email}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge
+                            color={getRoleBadgeColor(user.role?.name || null)}
+                            size="sm"
+                            variant="light"
+                          >
+                            {user.role?.name || 'No Role'}
+                          </Badge>
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge
+                            color={user.is_active ? 'green' : 'red'}
+                            size="sm"
+                            variant="light"
+                          >
+                            {user.is_active ? 'Active' : 'Inactive'}
+                          </Badge>
+                        </Table.Td>
+                        <Table.Td>
+                          <Text size="sm">
+                            {new Date(user.created_at).toLocaleDateString()}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Group gap="xs">
+                            <PermissionGate permission="users.manage_roles">
+                              <Select
+                                key={`${user.id}-${user.role?.id || 'no-role'}`}
+                                placeholder="Select role"
+                                value={user.role?.id || ''}
+                                onChange={(value) => {
+                                  updateUserRole(user.id, value);
+                                }}
+                                data={[
+                                  { value: '', label: 'No Role' },
+                                  ...roles.map((role) => ({
+                                    value: role.id,
+                                    label: role.name,
+                                  })),
+                                ]}
+                                size="sm"
+                                w={150}
+                                disabled={updatingUserId === user.id}
+                                clearable={false}
+                              />
+                            </PermissionGate>
+
+                            {/* Impersonate button - Super Admin only */}
+                            {userProfile?.role?.name?.toLowerCase() ===
+                              'super_admin' &&
+                              user.id !== authUser?.id && (
+                                <Tooltip label="Impersonate user">
+                                  <ActionIcon
+                                    color="blue"
+                                    variant="light"
+                                    size="sm"
+                                    onClick={() => impersonateUser(user)}
+                                  >
+                                    <IconUserCheck size={14} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              )}
+
+                            <PermissionGate
+                              anyPermissions={['users.delete', 'users.manage']}
+                            >
+                              {canDeleteUser(user) && (
+                                <Tooltip label="Delete user permanently">
+                                  <ActionIcon
+                                    color="red"
+                                    variant="light"
+                                    size="sm"
+                                    onClick={() => confirmDeleteUser(user)}
+                                    loading={deletingUserId === user.id}
+                                    disabled={deletingUserId === user.id}
+                                  >
+                                    <IconTrash size={14} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              )}
+                            </PermissionGate>
+                          </Group>
+                        </Table.Td>
+                      </Table.Tr>
+                    ))
+                  )}
                 </Table.Tbody>
               </Table>
-
-              {users.length === 0 && (
-                <Center h={200}>
-                  <Stack align="center">
-                    <Text size="lg" c="dimmed">
-                      No users found
-                    </Text>
-                    <Text size="sm" c="dimmed">
-                      Users will appear here when they sign up
-                    </Text>
-                  </Stack>
-                </Center>
-              )}
             </Stack>
           </Paper>
 
