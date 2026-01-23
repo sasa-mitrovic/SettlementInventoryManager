@@ -38,6 +38,7 @@ import { CraftingOrderModal } from '../components/CraftingOrderModal';
 import { DiscordIntegrationButton } from '../components/DiscordIntegrationButton';
 import { DiscordSetupModal } from '../components/DiscordSetupModal';
 import { DiscordOAuthSetup } from '../components/DiscordOAuthSetup';
+import { DiscordEditModal } from '../components/DiscordEditModal';
 
 // Use the SettlementCraftingOrder interface from the hook
 type CraftingOrder = SettlementCraftingOrder;
@@ -62,6 +63,11 @@ export function CraftingOrders() {
   ] = useDisclosure(false);
   const [oauthModalOpened, { open: openOAuthModal, close: closeOAuthModal }] =
     useDisclosure(false);
+  const [editModalOpened, { open: openEditModal, close: closeEditModal }] =
+    useDisclosure(false);
+
+  // Key to force refresh of Discord button after edits
+  const [discordRefreshKey, setDiscordRefreshKey] = useState(0);
 
   const { userProfile } = useOptimizedUserWithProfile();
 
@@ -313,8 +319,10 @@ export function CraftingOrders() {
 
           <Group>
             <DiscordIntegrationButton
+              key={discordRefreshKey}
               onManualSetupClick={openDiscordModal}
               onOAuthSetupClick={openOAuthModal}
+              onEditClick={openEditModal}
             />
             <Switch
               label="Show Completed Orders"
@@ -501,13 +509,29 @@ export function CraftingOrders() {
         opened={discordModalOpened}
         onClose={closeDiscordModal}
         onSuccess={() => {
-          // Optionally refresh Discord integration status
+          setDiscordRefreshKey((k) => k + 1);
           closeDiscordModal();
         }}
       />
 
       {/* Discord OAuth Setup Modal */}
-      <DiscordOAuthSetup opened={oauthModalOpened} onClose={closeOAuthModal} />
+      <DiscordOAuthSetup
+        opened={oauthModalOpened}
+        onClose={() => {
+          setDiscordRefreshKey((k) => k + 1);
+          closeOAuthModal();
+        }}
+      />
+
+      {/* Discord Edit Modal */}
+      <DiscordEditModal
+        opened={editModalOpened}
+        onClose={closeEditModal}
+        onSuccess={() => {
+          setDiscordRefreshKey((k) => k + 1);
+          closeEditModal();
+        }}
+      />
     </Container>
   );
 }
