@@ -346,7 +346,7 @@ export function DiscordEditModal({
                 {channels.map((channel, index) => {
                   if (channel.isDeleted) return null;
                   return (
-                    <Paper key={channel.id || `new-${index}`} p="sm" withBorder bg="gray.0">
+                    <Paper key={channel.id || `new-${index}`} p="sm" withBorder>
                       <Group justify="space-between" mb="xs">
                         <Group gap="xs">
                           <Text fw={500} size="sm">
