@@ -25,6 +25,7 @@ import {
   IconUser,
   IconTrash,
   IconUserCheck,
+  IconKey,
 } from '@tabler/icons-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabaseClient } from '../supabase/supabaseClient';
@@ -33,6 +34,7 @@ import { useAuth } from '../components/AuthProvider';
 import { PermissionGate } from '../components/PermissionGate';
 import { RolePermissionManagement } from '../components/RolePermissionManagement';
 import { CacheManager } from '../components/CacheManager';
+import { ChangePasswordModal } from '../components/ChangePasswordModal';
 import { usePermissionContext } from '../supabase/optimizedRoleHooks';
 import { useSettlement } from '../contexts/SettlementContext_simple';
 
@@ -66,6 +68,7 @@ export function Settings() {
   const [refreshing, setRefreshing] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [changePasswordModalOpened, setChangePasswordModalOpened] = useState(false);
 
   // Use AuthProvider for reliable authentication state
   const { user: authUser, loading: authLoading, initialized } = useAuth();
@@ -536,6 +539,28 @@ export function Settings() {
             </Alert>
           )}
 
+          {/* Account Settings Section */}
+          <Paper withBorder shadow="sm" radius="md" p="xl">
+            <Stack gap="md">
+              <Group>
+                <IconKey size={24} />
+                <Title order={3}>Account Settings</Title>
+              </Group>
+              <Text c="dimmed">
+                Manage your personal account settings and security.
+              </Text>
+              <Group>
+                <Button
+                  leftSection={<IconKey size={16} />}
+                  variant="light"
+                  onClick={() => setChangePasswordModalOpened(true)}
+                >
+                  Change Password
+                </Button>
+              </Group>
+            </Stack>
+          </Paper>
+
           {/* User Role Management Section */}
           <Paper withBorder shadow="sm" radius="md" p="xl">
             <Stack gap="md">
@@ -678,6 +703,12 @@ export function Settings() {
           {/* Cache Management */}
           <CacheManager />
         </Stack>
+
+        {/* Change Password Modal */}
+        <ChangePasswordModal
+          opened={changePasswordModalOpened}
+          onClose={() => setChangePasswordModalOpened(false)}
+        />
       </Container>
     </PermissionGate>
   );
