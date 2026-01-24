@@ -83,6 +83,12 @@ export function Authentication() {
                 {...form.getInputProps('password')}
               />
 
+              <Group justify="flex-end" mt="xs">
+                <Anchor component={Link} to="/forgot-password" size="sm">
+                  Forgot password?
+                </Anchor>
+              </Group>
+
               {loginError && (
                 <Text c="red" size="sm" mt="xs">
                   {loginError}

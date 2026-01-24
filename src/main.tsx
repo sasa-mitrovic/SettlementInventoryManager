@@ -16,7 +16,7 @@ import '@mantine/notifications/styles.css';
 import '@mantine/spotlight/styles.css';
 import { CustomSpotlight } from './mantine/spotlight.tsx';
 
-// Start the Discord polling service instead of realtime service
+// Start the Discord message service (uses Realtime WebSocket)
 discordPollingService.start();
 settlementPopulationService.start();
 

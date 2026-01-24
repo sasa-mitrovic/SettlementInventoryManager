@@ -2,6 +2,8 @@ import { createBrowserRouter } from 'react-router-dom';
 import { ProtectedPath } from '../components/ProtectedPath';
 import { Authentication } from '../views/Auth';
 import { Signup } from '../views/Signup';
+import { ForgotPassword } from '../views/ForgotPassword';
+import { ResetPassword } from '../views/ResetPassword';
 import { PermissionsDemo } from '../views/PermissionsDemo';
 import { AuthDebugView } from '../views/AuthDebugView';
 import { DiscordSetupPage } from '../views/DiscordSetupPage';
@@ -69,5 +71,15 @@ export const router = createBrowserRouter([
   {
     path: '/signup',
     element: <Signup />,
+  },
+
+  {
+    path: '/forgot-password',
+    element: <ForgotPassword />,
+  },
+
+  {
+    path: '/reset-password',
+    element: <ResetPassword />,
   },
 ]);
