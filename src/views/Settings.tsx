@@ -283,17 +283,9 @@ export function Settings() {
     const currentUserRole = userProfile.role.name.toLowerCase();
     const targetUserRole = targetUser.role?.name?.toLowerCase();
 
-    // Super admin can delete anyone except other super admins
+    // Only super admin can delete users (except other super admins)
     if (currentUserRole === 'super_admin') {
       return targetUserRole !== 'super_admin';
-    }
-
-    // Admin can delete users with no role or regular users, but not admins or super_admins
-    if (currentUserRole === 'admin') {
-      return (
-        !targetUserRole ||
-        (targetUserRole !== 'admin' && targetUserRole !== 'super_admin')
-      );
     }
 
     return false;
