@@ -29,7 +29,7 @@ export function ChangePasswordModal({ opened, onClose }: ChangePasswordModalProp
     },
     validate: {
       newPassword: (value) =>
-        value.length < 6 ? 'Password must be at least 6 characters' : null,
+        value.length < 8 ? 'Password must be at least 8 characters' : null,
       confirmPassword: (value, values) =>
         value !== values.newPassword ? 'Passwords do not match' : null,
     },
@@ -63,6 +63,7 @@ export function ChangePasswordModal({ opened, onClose }: ChangePasswordModalProp
 
       handleClose();
     } catch (err) {
+      console.error('Error changing password:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -84,7 +85,7 @@ export function ChangePasswordModal({ opened, onClose }: ChangePasswordModalProp
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            Enter your new password below. Make sure it's at least 6 characters long.
+            Enter your new password below. Make sure it's at least 8 characters long.
           </Text>
 
           <PasswordInput

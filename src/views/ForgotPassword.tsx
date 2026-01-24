@@ -29,7 +29,10 @@ export function ForgotPassword() {
       email: '',
     },
     validate: {
-      email: (value) => (/^\S+@\S+$/.test(value) ? null : 'Invalid email'),
+      email: (value) =>
+        /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value)
+          ? null
+          : 'Please enter a valid email address',
     },
   });
 
@@ -58,6 +61,7 @@ export function ForgotPassword() {
 
       setEmailSent(true);
     } catch (err) {
+      console.error('Error sending password reset email:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);

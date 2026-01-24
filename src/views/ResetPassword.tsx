@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -32,42 +32,71 @@ export function ResetPassword() {
     },
     validate: {
       password: (value) =>
-        value.length < 6 ? 'Password must be at least 6 characters' : null,
+        value.length < 8 ? 'Password must be at least 8 characters' : null,
       confirmPassword: (value, values) =>
         value !== values.password ? 'Passwords do not match' : null,
     },
   });
 
+  // Track if component is mounted to avoid state updates after unmount
+  const isMountedRef = useRef(true);
+
   // Check if user has a valid recovery session
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabaseClient.auth.getSession();
+    isMountedRef.current = true;
+    let subscription: { unsubscribe: () => void } | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
 
-      // User should have a session from the recovery link
-      if (session) {
-        setIsValidSession(true);
-      } else {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+
+        // User should have a session from the recovery link
+        if (session) {
+          if (isMountedRef.current) {
+            setIsValidSession(true);
+          }
+          return;
+        }
+
         // Listen for auth state changes (recovery link sets session)
-        const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
+        const { data } = supabaseClient.auth.onAuthStateChange(
           (event, session) => {
             if (event === 'PASSWORD_RECOVERY' && session) {
-              setIsValidSession(true);
+              if (isMountedRef.current) {
+                setIsValidSession(true);
+              }
             }
           }
         );
+        subscription = data.subscription;
 
-        // Give it a moment to process the recovery token from URL
-        setTimeout(() => {
-          if (isValidSession === null) {
-            setIsValidSession(false);
+        // Give it time to process the recovery token from URL
+        timeoutId = setTimeout(() => {
+          if (isMountedRef.current) {
+            setIsValidSession((current) => current === null ? false : current);
           }
-        }, 2000);
-
-        return () => subscription.unsubscribe();
+        }, 5000);
+      } catch (err) {
+        console.error('Error checking session:', err);
+        if (isMountedRef.current) {
+          setIsValidSession(false);
+        }
       }
     };
 
     checkSession();
+
+    // Cleanup function
+    return () => {
+      isMountedRef.current = false;
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   const handleSubmit = async (values: typeof form.values) => {
@@ -88,6 +117,7 @@ export function ResetPassword() {
       await supabaseClient.auth.signOut();
       setSuccess(true);
     } catch (err) {
+      console.error('Error updating password:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
